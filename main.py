@@ -10,6 +10,7 @@ from bnb.binance import RobotBinance
 from indicators.technical_indicators import TechnicalAnalyzer
 from ai.kimi_client import GeminiClient
 from strategy.strategies import StrategyManager, SignalType
+from presenters.console_table import render_table
 import time
 
 # Configurar logging básico
@@ -41,7 +42,9 @@ def format_color(color: str) -> str:
 def process_symbols(strategy_manager: StrategyManager):
     """Process all configured symbols"""
     print(f"\n🚀 Procesando {len(SYMBOLS)} símbolos en timeframe {time_frame}...")
-    
+    table_rows = []
+    reasons = []
+
     for symbol in SYMBOLS:  # Process all symbols
         print(f"\n{'='*60}")
         print(f"📊 Analizando: {symbol}")
@@ -89,22 +92,18 @@ def process_symbols(strategy_manager: StrategyManager):
             if current_price is not None and current_price == current_price:
                 price_display = f"${current_price:.2f}"
 
-            print(f"🎯 SEÑAL: {signal.signal_type.value} | Fuerza: {signal.strength.value} | Confianza: {signal.confidence:.1%}")
-            print(f"🎨 Squeeze: {format_color(squeeze_color)} | Momentum: {format_color(momentum_color)}")
-            print(f"🔮 Trend Magic: {format_color(trend_magic_color)} ({trend_magic_display})")
-            print(f"💹 Precio actual: {price_display}")
+            table_rows.append(
+                (
+                    symbol,
+                    format_color(squeeze_color),
+                    format_color(momentum_color),
+                    format_color(trend_magic_color),
+                    trend_magic_display,
+                    price_display,
+                )
+            )
 
-            if signal.signal_type != SignalType.WAIT:
-                if signal.entry_price is not None and signal.entry_price == signal.entry_price:
-                    print(f"💰 Entrada: ${signal.entry_price:.2f}")
-                if signal.stop_loss is not None and signal.stop_loss == signal.stop_loss:
-                    print(f"🛑 SL: ${signal.stop_loss:.2f}")
-                if signal.take_profit is not None and signal.take_profit == signal.take_profit:
-                    print(f"🎯 TP: ${signal.take_profit:.2f}")
-                if signal.risk_reward_ratio is not None and signal.risk_reward_ratio == signal.risk_reward_ratio:
-                    print(f"📊 R/R: {signal.risk_reward_ratio:.2f}")
-
-            print(f"📝 Razón: {signal.reason}")
+            reasons.append((symbol, signal.reason))
 
             # AI Analysis only if valid signal (LONG/SHORT)
             if signal.signal_type != SignalType.WAIT:
@@ -146,6 +145,25 @@ def process_symbols(strategy_manager: StrategyManager):
 
         except Exception as e:
             print(f"❌ Error procesando {symbol}: {e}")
+
+    if table_rows:
+        print("\n📊 RESUMEN DE INDICADORES")
+        render_table(
+            [
+                "Símbolo",
+                "Squeeze",
+                "Momentum",
+                "Trend Magic",
+                "Trend Magic Valor",
+                "Precio actual",
+            ],
+            table_rows,
+        )
+
+    if reasons:
+        print("\n📝 RAZONES POR SÍMBOLO")
+        for symbol, reason in reasons:
+            print(f"- {symbol}: {reason}")
 
 def main():
     print("⚔️ BOT ESPARTANO MULTI-CRIPTO - MODO INSTITUCIONAL ⚔️")
