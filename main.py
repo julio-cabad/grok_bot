@@ -103,6 +103,40 @@ def main():
         gemini = GeminiClient()
         response = gemini.query("¿Qué modelo de IA eres?")
         print(f"🎯 Respuesta de Gemini: {response}")
+
+        # Análisis institucional con datos técnicos
+        print("\n🔍 Realizando análisis institucional con Gemini...")
+        current_data = df.iloc[-1]  # Última vela
+        data_summary = f"""
+        DATOS ACTUALES DE BTC/USDT (4h):
+        - Precio actual: ${current_data['close']:.2f}
+        - RSI (14): {current_data['RSI_14']:.2f}
+        - MACD: {current_data['MACD_12_26_9']:.4f}
+        - MACD Signal: {current_data['MACD_signal_12_26_9']:.4f}
+        - MACD Histogram: {current_data['MACD_hist_12_26_9']:.4f}
+        - Bollinger Bands:
+          * Upper: {current_data['BB_upper_20']:.2f}
+          * Middle: {current_data['BB_middle_20']:.2f}
+          * Lower: {current_data['BB_lower_20']:.2f}
+        - Estocástico:
+          * %K: {current_data['STOCH_K_14_3']:.2f}
+          * %D: {current_data['STOCH_D_14_3']:.2f}
+        - Trend Magic: {current_data['MagicTrend_Color']} ({current_data['MagicTrend']:.2f})
+        - Squeeze Momentum: {current_data['squeeze_color']} ({current_data['momentum_color']})
+
+        ESTADÍSTICAS GENERALES:
+        - Precio promedio: ${df['close'].mean():.2f}
+        - Precio máximo: ${df['high'].max():.2f}
+        - Precio mínimo: ${df['low'].min():.2f}
+        - Volumen promedio: {df['volume'].mean():.0f}
+        """
+
+        analysis = gemini.analyze_market_data(data_summary)
+        print("📊 ANÁLISIS INSTITUCIONAL GEMINI:")
+        print("=" * 80)
+        print(analysis["analysis"])
+        print("=" * 80)
+
     except Exception as e:
         print(f"❌ Error con Gemini AI: {e}")
 
