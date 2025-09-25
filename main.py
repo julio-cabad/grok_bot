@@ -43,13 +43,8 @@ def process_symbols(strategy_manager: StrategyManager):
     """Process all configured symbols"""
     print(f"\n🚀 Procesando {len(SYMBOLS)} símbolos en timeframe {time_frame}...")
     table_rows = []
-    reasons = []
 
-    for symbol in SYMBOLS:  # Process all symbols
-        print(f"\n{'='*60}")
-        print(f"📊 Analizando: {symbol}")
-        print(f"{'='*60}")
-
+    for symbol in SYMBOLS[:3]:  # Process all symbols
         try:
             # Get market data
             robot = RobotBinance(pair=symbol, temporality=time_frame)
@@ -58,8 +53,6 @@ def process_symbols(strategy_manager: StrategyManager):
             if df.empty:
                 print(f"⚠️ No se obtuvieron datos para {symbol}")
                 continue
-
-            print(f"✅ Datos obtenidos: {len(df)} velas")
 
             # Calculate technical indicators
             analyzer = TechnicalAnalyzer(symbol=symbol, timeframe=time_frame)
@@ -100,10 +93,9 @@ def process_symbols(strategy_manager: StrategyManager):
                     format_color(trend_magic_color),
                     trend_magic_display,
                     price_display,
+                    signal.reason,
                 )
             )
-
-            reasons.append((symbol, signal.reason))
 
             # AI Analysis only if valid signal (LONG/SHORT)
             if signal.signal_type != SignalType.WAIT:
@@ -156,14 +148,10 @@ def process_symbols(strategy_manager: StrategyManager):
                 "Trend Magic",
                 "Trend Magic Valor",
                 "Precio actual",
+                "Razón",
             ],
             table_rows,
         )
-
-    if reasons:
-        print("\n📝 RAZONES POR SÍMBOLO")
-        for symbol, reason in reasons:
-            print(f"- {symbol}: {reason}")
 
 def main():
     print("⚔️ BOT ESPARTANO MULTI-CRIPTO - MODO INSTITUCIONAL ⚔️")
