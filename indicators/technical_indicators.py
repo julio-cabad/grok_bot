@@ -460,7 +460,8 @@ class TechnicalAnalyzer:
                 momentum_trend = "🔴 BEARISH"
 
             # Add columns to data DataFrame
-            data['momentum_color'] = momentum_color
+            data['momentum_bar_color'] = momentum_color
+            data['momentum_color'] = squeeze_state_color
             data['momentum_trend'] = momentum_trend
             data['squeeze_color'] = momentum_color
             data['squeeze_state_color'] = squeeze_state_color
@@ -471,7 +472,8 @@ class TechnicalAnalyzer:
 
             result = {
                 "momentum_value": current_val,
-                "momentum_color": momentum_color,
+                "momentum_bar_color": momentum_color,
+                "momentum_color": squeeze_state_color,
                 "momentum_trend": momentum_trend,
                 "squeeze_color": momentum_color,
                 "squeeze_state_color": squeeze_state_color,
