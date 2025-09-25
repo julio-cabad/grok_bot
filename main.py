@@ -88,12 +88,15 @@ def process_symbols(strategy_manager: StrategyManager):
             entry_display = "-"
             sl_display = "-"
             tp_display = "-"
+            opened_at_display = "-"
             if signal.entry_price is not None and signal.entry_price == signal.entry_price:
                 entry_display = f"${signal.entry_price:.2f}"
             if signal.stop_loss is not None and signal.stop_loss == signal.stop_loss:
                 sl_display = f"${signal.stop_loss:.2f}"
             if signal.take_profit is not None and signal.take_profit == signal.take_profit:
                 tp_display = f"${signal.take_profit:.2f}"
+            if signal.position_opened_at:
+                opened_at_display = signal.position_opened_at
 
             table_rows.append(
                 (
@@ -106,6 +109,7 @@ def process_symbols(strategy_manager: StrategyManager):
                     entry_display,
                     sl_display,
                     tp_display,
+                    opened_at_display,
                     signal.reason,
                 )
             )
@@ -164,6 +168,7 @@ def process_symbols(strategy_manager: StrategyManager):
                 "Entrada",
                 "Stop Loss",
                 "Take Profit",
+                "Hora Entrada",
                 "Razón",
             ],
             table_rows,

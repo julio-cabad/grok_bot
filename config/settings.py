@@ -55,11 +55,9 @@ AUTO_CLOSE_ON_TARGET: bool = True  # Cerrar automáticamente en take profit/stop
 POSITION_SIZE: float = 100.0  # Tamaño fijo de posición en USD
 
 time_frame: str = '1m'
-
+TIMEZONE: str = "America/Guayaquil"  # Ecuador timezone (UTC-5)
 # Número de velas a obtener por defecto
 CANDLES_LIMIT: int = 500
 # Bot Configuration
 CHECK_INTERVAL_SECONDS: int = 5  # Intervalo entre verificaciones en segundos (300 = 5 minutos)
 ENABLE_INFINITE_LOOP: bool = True  # Habilitar bucle infinito
-# System Configuration
-TIMEZONE: str = "America/Guayaquil"  # Ecuador timezone (UTC-5)

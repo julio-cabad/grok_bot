@@ -10,6 +10,9 @@ from typing import Dict, List, Any, Optional
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from config.settings import TIMEZONE
 
 class SignalType(Enum):
     LONG = "LONG"
@@ -38,6 +41,7 @@ class TradingSignal:
     confidence: float  # 0-1
     timestamp: str
     reason: str
+    position_opened_at: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -50,7 +54,8 @@ class TradingSignal:
             'risk_reward_ratio': self.risk_reward_ratio,
             'confidence': self.confidence,
             'timestamp': self.timestamp,
-            'reason': self.reason
+            'reason': self.reason,
+            'position_opened_at': self.position_opened_at,
         }
 
 class StrategyManager:
@@ -67,6 +72,7 @@ class StrategyManager:
         self.logger.setLevel(logging.WARNING)
         self.last_alerted_signal: Dict[str, SignalType] = {}
         self.open_positions: Dict[str, Dict[str, Any]] = {}
+        self.timezone = ZoneInfo(TIMEZONE)
 
     def _trigger_alert(self, symbol: str, signal_type: SignalType, reason: str) -> None:
         """Play an audible alert and log the new trading signal."""
@@ -106,12 +112,14 @@ class StrategyManager:
             stop_loss = None
             take_profit = None
             rr_ratio = None
+            entry_time_str = None
 
             if position:
                 entry_price = position.get('entry_price')
                 stop_loss = position.get('stop_loss')
                 take_profit = position.get('take_profit')
                 rr_ratio = position.get('risk_reward')
+                entry_time_str = position.get('opened_at')
 
             signal_type = SignalType.WAIT
             strength = SignalStrength.WEAK
@@ -184,12 +192,14 @@ class StrategyManager:
                         rr_ratio = reward / risk if risk > 0 else None
 
                     entry_price = close_price
+                    entry_time_str = datetime.now(self.timezone).strftime("%Y-%m-%d %H:%M")
                     self.open_positions[symbol] = {
                         'type': signal_type,
                         'entry_price': entry_price,
                         'stop_loss': stop_loss,
                         'take_profit': take_profit,
                         'risk_reward': rr_ratio,
+                        'opened_at': entry_time_str,
                     }
                 elif signal_type in (SignalType.LONG, SignalType.SHORT):
                     signal_type = SignalType.WAIT
@@ -201,13 +211,14 @@ class StrategyManager:
                 symbol=symbol,
                 signal_type=signal_type,
                 strength=strength,
-                entry_price=entry_price if signal_type != SignalType.WAIT else None,
+                entry_price=entry_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
                 risk_reward_ratio=rr_ratio,
                 confidence=confidence,
                 timestamp=datetime.utcnow().isoformat(),
-                reason=reason
+                reason=reason,
+                position_opened_at=entry_time_str,
             )
 
             if signal.signal_type in (SignalType.LONG, SignalType.SHORT, SignalType.EXIT):
