@@ -153,7 +153,7 @@ class StrategyManager:
                     signal_type = SignalType.WAIT
                     strength = SignalStrength.MEDIUM
                     confidence = 0.6
-                    reason = "NO OPEN"
+                    reason = pos_type.value
             else:
                 if squeeze_color in self.LONG_SQUEEZE_COLORS and magic_color == 'BLUE' and close_price is not None:
                     signal_type = SignalType.LONG
