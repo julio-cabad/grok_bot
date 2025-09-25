@@ -5,6 +5,7 @@ High-performance, scalable strategies for multi-crypto institutional trading
 """
 
 import logging
+import sys
 from typing import Dict, List, Any, Optional
 from enum import Enum
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ class SignalType(Enum):
     LONG = "LONG"
     SHORT = "SHORT"
     WAIT = "WAIT"
+    EXIT = "EXIT"
 
 class SignalStrength(Enum):
     WEAK = "WEAK"
@@ -57,9 +59,25 @@ class StrategyManager:
     Manages multiple trading strategies for multi-crypto operations
     """
 
+    LONG_SQUEEZE_COLORS = {"MAROON", "LIME"}
+    SHORT_SQUEEZE_COLORS = {"RED", "GREEN"}
+
     def __init__(self):
         self.logger = logging.getLogger("StrategyManager")
         self.logger.setLevel(logging.WARNING)
+        self.last_alerted_signal: Dict[str, SignalType] = {}
+        self.open_positions: Dict[str, Dict[str, Any]] = {}
+
+    def _trigger_alert(self, symbol: str, signal_type: SignalType, reason: str) -> None:
+        """Play an audible alert and log the new trading signal."""
+        try:
+            sys.stdout.write('\a')
+            sys.stdout.flush()
+        except Exception:
+            pass
+        label = "Cierre" if signal_type == SignalType.EXIT else "Señal"
+        print(f"🔔 ALERTA ESPARTANA {symbol}: {label} {signal_type.value}")
+        print(f"   ➤ Motivo: {reason}")
 
     def squeeze_magic_strategy(self, df: Any, symbol: str) -> TradingSignal:
         """
@@ -78,49 +96,106 @@ class StrategyManager:
             # Get latest values
             current_data = df.iloc[-1]
             squeeze_color = current_data.get('squeeze_color')
+            momentum_color = current_data.get('momentum_color')
             magic_color = current_data.get('MagicTrend_Color')
             close_price = current_data.get('close')
 
-            # Strategy logic
-            signal_type = SignalType.WAIT
-            strength = SignalStrength.WEAK
-            confidence = 0.5
-            reason = "No clear signal"
+            position = self.open_positions.get(symbol)
 
-            # LONG conditions
-            if squeeze_color in ['MAROON', 'LIME'] and magic_color == 'BLUE':
-                signal_type = SignalType.LONG
-                strength = SignalStrength.MEDIUM
-                confidence = 0.7
-                reason = f"Squeeze {squeeze_color} + Magic BLUE = LONG setup"
-
-            # SHORT conditions
-            elif squeeze_color in ['MAROON', 'LIME'] and magic_color == 'RED':
-                signal_type = SignalType.SHORT
-                strength = SignalStrength.MEDIUM
-                confidence = 0.7
-                reason = f"Squeeze {squeeze_color} + Magic RED = SHORT setup"
-
-            # Calculate risk management (basic)
-            entry_price = close_price
+            entry_price = None
             stop_loss = None
             take_profit = None
             rr_ratio = None
 
-            if signal_type != SignalType.WAIT:
-                # Basic SL/TP calculation
-                atr = current_data.get('ATR', close_price * 0.02)  # fallback ATR
-                if signal_type == SignalType.LONG:
-                    stop_loss = close_price - (atr * 1.5)
-                    take_profit = close_price + (atr * 3)
-                else:  # SHORT
-                    stop_loss = close_price + (atr * 1.5)
-                    take_profit = close_price - (atr * 3)
+            if position:
+                entry_price = position.get('entry_price')
+                stop_loss = position.get('stop_loss')
+                take_profit = position.get('take_profit')
+                rr_ratio = position.get('risk_reward')
 
-                if stop_loss and take_profit:
-                    risk = abs(close_price - stop_loss)
-                    reward = abs(take_profit - close_price)
-                    rr_ratio = reward / risk if risk > 0 else None
+            signal_type = SignalType.WAIT
+            strength = SignalStrength.WEAK
+            confidence = 0.5
+            reason = "NO OPEN"
+
+            if position:
+                pos_type = position['type']
+                exit_reason = None
+
+                if close_price is not None:
+                    if pos_type == SignalType.LONG:
+                        if stop_loss is not None and close_price <= stop_loss:
+                            exit_reason = "EXIT STOP LOSE"
+                        elif squeeze_color not in self.LONG_SQUEEZE_COLORS or magic_color != 'BLUE':
+                            exit_reason = "EXIT BY COLOR"
+                    elif pos_type == SignalType.SHORT:
+                        if stop_loss is not None and close_price >= stop_loss:
+                            exit_reason = "EXIT STOP LOSE"
+                        elif squeeze_color not in self.SHORT_SQUEEZE_COLORS or magic_color != 'RED':
+                            exit_reason = "EXIT BY COLOR"
+                else:
+                    if pos_type == SignalType.LONG and (
+                        squeeze_color not in self.LONG_SQUEEZE_COLORS or magic_color != 'BLUE'
+                    ):
+                        exit_reason = "EXIT BY COLOR"
+                    elif pos_type == SignalType.SHORT and (
+                        squeeze_color not in self.SHORT_SQUEEZE_COLORS or magic_color != 'RED'
+                    ):
+                        exit_reason = "EXIT BY COLOR"
+
+                if exit_reason:
+                    signal_type = SignalType.EXIT
+                    strength = SignalStrength.STRONG
+                    confidence = 0.8
+                    reason = exit_reason
+                    self.open_positions.pop(symbol, None)
+                else:
+                    signal_type = SignalType.WAIT
+                    strength = SignalStrength.MEDIUM
+                    confidence = 0.6
+                    reason = "NO OPEN"
+            else:
+                if squeeze_color in self.LONG_SQUEEZE_COLORS and magic_color == 'BLUE' and close_price is not None:
+                    signal_type = SignalType.LONG
+                    strength = SignalStrength.MEDIUM
+                    confidence = 0.7
+                    reason = "LONG"
+                elif squeeze_color in self.SHORT_SQUEEZE_COLORS and magic_color == 'RED' and close_price is not None:
+                    signal_type = SignalType.SHORT
+                    strength = SignalStrength.MEDIUM
+                    confidence = 0.7
+                    reason = "SHORT"
+
+                if signal_type in (SignalType.LONG, SignalType.SHORT) and close_price is not None:
+                    atr = current_data.get('ATR')
+                    if atr is None:
+                        atr = close_price * 0.02
+
+                    if signal_type == SignalType.LONG:
+                        stop_loss = close_price - (atr * 1.5)
+                        take_profit = close_price + (atr * 3)
+                    else:
+                        stop_loss = close_price + (atr * 1.5)
+                        take_profit = close_price - (atr * 3)
+
+                    if stop_loss is not None and take_profit is not None:
+                        risk = abs(close_price - stop_loss)
+                        reward = abs(take_profit - close_price)
+                        rr_ratio = reward / risk if risk > 0 else None
+
+                    entry_price = close_price
+                    self.open_positions[symbol] = {
+                        'type': signal_type,
+                        'entry_price': entry_price,
+                        'stop_loss': stop_loss,
+                        'take_profit': take_profit,
+                        'risk_reward': rr_ratio,
+                    }
+                elif signal_type in (SignalType.LONG, SignalType.SHORT):
+                    signal_type = SignalType.WAIT
+                    strength = SignalStrength.WEAK
+                    confidence = 0.0
+                    reason = "NO OPEN"
 
             signal = TradingSignal(
                 symbol=symbol,
@@ -134,6 +209,14 @@ class StrategyManager:
                 timestamp=datetime.utcnow().isoformat(),
                 reason=reason
             )
+
+            if signal.signal_type in (SignalType.LONG, SignalType.SHORT, SignalType.EXIT):
+                previous = self.last_alerted_signal.get(symbol)
+                if previous != signal.signal_type:
+                    self._trigger_alert(symbol, signal.signal_type, signal.reason)
+                self.last_alerted_signal[symbol] = signal.signal_type
+            else:
+                self.last_alerted_signal[symbol] = SignalType.WAIT
 
             return signal
 

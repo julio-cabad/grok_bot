@@ -44,7 +44,7 @@ def process_symbols(strategy_manager: StrategyManager):
     print(f"\n🚀 Procesando {len(SYMBOLS)} símbolos en timeframe {time_frame}...")
     table_rows = []
 
-    for symbol in SYMBOLS[:3]:  # Process all symbols
+    for symbol in SYMBOLS[:10]:  # Process all symbols
         try:
             # Get market data
             robot = RobotBinance(pair=symbol, temporality=time_frame)
@@ -85,20 +85,41 @@ def process_symbols(strategy_manager: StrategyManager):
             if current_price is not None and current_price == current_price:
                 price_display = f"${current_price:.2f}"
 
+            signal_display = signal.signal_type.value
+            entry_display = "-"
+            sl_display = "-"
+            tp_display = "-"
+            rr_display = "-"
+
+            if signal.signal_type in (SignalType.LONG, SignalType.SHORT, SignalType.EXIT):
+                if signal.entry_price is not None and signal.entry_price == signal.entry_price:
+                    entry_display = f"${signal.entry_price:.2f}"
+                if signal.stop_loss is not None and signal.stop_loss == signal.stop_loss:
+                    sl_display = f"${signal.stop_loss:.2f}"
+                if signal.take_profit is not None and signal.take_profit == signal.take_profit:
+                    tp_display = f"${signal.take_profit:.2f}"
+                if signal.risk_reward_ratio is not None and signal.risk_reward_ratio == signal.risk_reward_ratio:
+                    rr_display = f"{signal.risk_reward_ratio:.2f}"
+
             table_rows.append(
                 (
                     symbol,
+                    signal_display,
                     format_color(squeeze_color),
                     format_color(momentum_color),
                     format_color(trend_magic_color),
                     trend_magic_display,
                     price_display,
+                    entry_display,
+                    sl_display,
+                    tp_display,
+                    rr_display,
                     signal.reason,
                 )
             )
 
             # AI Analysis only if valid signal (LONG/SHORT)
-            if signal.signal_type != SignalType.WAIT:
+            if signal.signal_type in (SignalType.LONG, SignalType.SHORT):
                 print("\n🤖 ACTIVANDO ANÁLISIS INSTITUCIONAL GEMINI...")
                 entry = signal.entry_price if signal.entry_price is not None else current_price
                 sl = signal.stop_loss if signal.stop_loss is not None else current_price
@@ -126,11 +147,11 @@ def process_symbols(strategy_manager: StrategyManager):
                 """
 
                 try:
-                    gemini = GeminiClient()
-                    analysis = gemini.analyze_market_data(data_summary)
-                    print("📊 ANÁLISIS INSTITUCIONAL GEMINI:")
+                    #gemini = GeminiClient()
+                    #analysis = gemini.analyze_market_data(data_summary)
+                    #print("📊 ANÁLISIS INSTITUCIONAL GEMINI:")
                     print("=" * 80)
-                    print(analysis["analysis"])
+                    #print(analysis["analysis"])
                     print("=" * 80)
                 except Exception as e:
                     print(f"❌ Error con Gemini: {e}")
@@ -143,11 +164,16 @@ def process_symbols(strategy_manager: StrategyManager):
         render_table(
             [
                 "Símbolo",
+                "Señal",
                 "Squeeze",
                 "Momentum",
                 "Trend Magic",
                 "Trend Magic Valor",
                 "Precio actual",
+                "Entrada",
+                "Stop Loss",
+                "Take Profit",
+                "R/R",
                 "Razón",
             ],
             table_rows,

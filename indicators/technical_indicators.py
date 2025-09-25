@@ -439,11 +439,11 @@ class TechnicalAnalyzer:
             current_no_sqz = no_sqz.iloc[-1] if not pd.isna(no_sqz.iloc[-1]) else False
 
             if current_no_sqz:
-                squeeze_color = "BLUE"  # No squeeze
+                squeeze_state_color = "BLUE"  # No squeeze
             elif current_sqz_on:
-                squeeze_color = "BLACK"  # Squeeze on
+                squeeze_state_color = "BLACK"  # Squeeze on
             else:
-                squeeze_color = "GRAY"  # Squeeze off
+                squeeze_state_color = "GRAY"  # Squeeze off
 
             # Determine squeeze status
             if current_sqz_on:
@@ -461,9 +461,10 @@ class TechnicalAnalyzer:
 
             # Add columns to data DataFrame
             data['momentum_color'] = momentum_color
-            data['squeeze_color'] = squeeze_color
-            data['squeeze_status'] = squeeze_status
             data['momentum_trend'] = momentum_trend
+            data['squeeze_color'] = momentum_color
+            data['squeeze_state_color'] = squeeze_state_color
+            data['squeeze_status'] = squeeze_status
 
             # Update self.df with the calculated columns
             self.df = data
@@ -472,7 +473,8 @@ class TechnicalAnalyzer:
                 "momentum_value": current_val,
                 "momentum_color": momentum_color,
                 "momentum_trend": momentum_trend,
-                "squeeze_color": squeeze_color,
+                "squeeze_color": momentum_color,
+                "squeeze_state_color": squeeze_state_color,
                 "squeeze_status": squeeze_status,
                 "squeeze_on": current_sqz_on,
                 "squeeze_off": current_sqz_off,
