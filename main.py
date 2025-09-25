@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Script de prueba para verificar la conexión con Binance y mostrar datos OHLCV
+Bot Multi-Cripto de Trading Institucional - Spartan Code Edition
+Monitoreo continuo 24/7 con análisis AI condicional
 """
 
 import logging
@@ -8,46 +9,33 @@ from config.settings import *
 from bnb.binance import RobotBinance
 from indicators.technical_indicators import TechnicalAnalyzer
 from ai.kimi_client import GeminiClient
+from strategy.strategies import StrategyManager, SignalType
+import time
 
 # Configurar logging básico
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def main():
-    print("🚀 Iniciando prueba de conexión con Binance...", time_frame)
+def process_symbols(strategy_manager: StrategyManager):
+    """Process all configured symbols"""
+    print(f"\n🚀 Procesando {len(SYMBOLS)} símbolos en timeframe {time_frame}...")
+    
+    for symbol in SYMBOLS:  # Process all symbols
+        print(f"\n{'='*60}")
+        print(f"📊 Analizando: {symbol}")
+        print(f"{'='*60}")
 
-    # Elegir un símbolo para probar (usando el primero de la lista)
-    symbol = SYMBOLS[0]  # BTCUSDT
-    print(f"📊 Probando con símbolo: {symbol}")
+        try:
+            # Get market data
+            robot = RobotBinance(pair=symbol, temporality=time_frame)
+            df = robot.candlestick(limit=CANDLES_LIMIT)
 
-    # Inicializar el cliente de Binance
-    try:
-        robot = RobotBinance(pair=symbol, temporality=time_frame)
-        print("✅ Conexión exitosa con Binance!")
-    except Exception as e:
-        print(f"❌ Error al conectar con Binance: {e}")
-        return
+            if df.empty:
+                print(f"⚠️ No se obtuvieron datos para {symbol}")
+                continue
 
-    # Probar obtener precio actual
-    try:
-        price = robot.symbol_price(symbol)
-        if price:
-            print(f"💰 Precio actual de {symbol}: ${price:.2f}")
-        else:
-            print(f"⚠️ No se pudo obtener el precio de {symbol}")
-    except Exception as e:
-        print(f"❌ Error al obtener precio: {e}")
-
-    # Obtener datos OHLCV
-    try:
-        print(f"\n📈 Obteniendo datos OHLCV de {symbol} (últimas {CANDLES_LIMIT} velas de {time_frame})...")
-        df = robot.candlestick(limit=CANDLES_LIMIT)
-
-        if df.empty:
-            print("⚠️ No se obtuvieron datos OHLCV")
-        else:
             print(f"✅ Datos obtenidos: {len(df)} velas")
 
-            # Integrar Trend Magic al DataFrame
+            # Calculate technical indicators
             analyzer = TechnicalAnalyzer(symbol=symbol, timeframe=time_frame)
             analyzer.df = df
             analyzer.trend_magic()
@@ -58,87 +46,88 @@ def main():
             analyzer.calculate_stochastic()
             df = analyzer.df
 
-            print("\n📊 Últimas 10 velas OHLCV con Indicadores Técnicos:")
+            # Execute strategy
+            signal = strategy_manager.execute_strategy("squeeze_magic", df, symbol)
 
-            # Mostrar las últimas 10 velas en formato tabular
-            df = df.drop(columns=["ATR"])
-            recent_data = df.tail(10)
-            print(f"{'Timestamp':<20} {'Open':<10} {'High':<10} {'Low':<10} {'Close':<10} {'Volume':<12} {'MagicTrend':<12} {'Color':^6} {'Momentum':^8} {'Squeeze':^7} {'RSI':^6} {'BB_Mid':<10} {'BB_Up':<10} {'BB_Low':<10} {'MACD':<10} {'Stoch_K':<8} {'Stoch_D':<8}")
-            print("-" * 170)
+            # Display signal
+            print(f"🎯 SEÑAL: {signal.signal_type.value} | Fuerza: {signal.strength.value} | Confianza: {signal.confidence:.1%}")
+            print(f"💰 Entrada: ${signal.entry_price:.2f}" if signal.entry_price else "💰 Entrada: N/A")
+            print(f"🛑 SL: ${signal.stop_loss:.2f}" if signal.stop_loss else "🛑 SL: N/A")
+            print(f"🎯 TP: ${signal.take_profit:.2f}" if signal.take_profit else "🎯 TP: N/A")
+            print(f"📊 R/R: {signal.risk_reward_ratio:.2f}" if signal.risk_reward_ratio else "📊 R/R: N/A")
+            print(f"📝 Razón: {signal.reason}")
 
-            for timestamp, row in recent_data.iterrows():
-                print(f"{timestamp.strftime('%Y-%m-%d %H:%M'):<20} "
-                      f"{row['open']:<10.4f} "
-                      f"{row['high']:<10.4f} "
-                      f"{row['low']:<10.4f} "
-                      f"{row['close']:<10.4f} "
-                      f"{row['volume']:<12.2f} "
-                      f"{row['MagicTrend']:<12.4f} "
-                      f"{row['MagicTrend_Color']:^6} "
-                      f"{row['momentum_color']:^8} "
-                      f"{row['squeeze_color']:^7} "
-                      f"{row['RSI_14']:^6.2f} "
-                      f"{row['BB_middle_20']:<10.4f} "
-                      f"{row['BB_upper_20']:<10.4f} "
-                      f"{row['BB_lower_20']:<10.4f} "
-                      f"{row['MACD_12_26_9']:<10.4f} "
-                      f"{row['STOCH_K_14_3']:<8.2f} "
-                      f"{row['STOCH_D_14_3']:<8.2f}")
+            # AI Analysis only if valid signal (LONG/SHORT)
+            if signal.signal_type != SignalType.WAIT:
+                print("\n🤖 ACTIVANDO ANÁLISIS INSTITUCIONAL GEMINI...")
+                current_data = df.iloc[-1]
+                data_summary = f"""
+                SEÑAL GENERADA PARA {symbol}:
+                - Tipo: {signal.signal_type.value}
+                - Precio Entrada: ${signal.entry_price:.2f}
+                - Stop Loss: ${signal.stop_loss:.2f}
+                - Take Profit: ${signal.take_profit:.2f}
+                - Risk/Reward: {signal.risk_reward_ratio:.2f}
+                - Confianza: {signal.confidence:.1%}
+                - Razón: {signal.reason}
 
-            # Resumen estadístico básico
-            print("\n📈 Resumen estadístico:")
-            print(f"Precio promedio: ${df['close'].mean():.2f}")
-            print(f"Precio máximo: ${df['high'].max():.2f}")
-            print(f"Precio mínimo: ${df['low'].min():.2f}")
-            print(f"Volumen total: {df['volume'].sum():.2f}")
+                DATOS TÉCNICOS ACTUALES DE {symbol} ({time_frame}):
+                - Precio actual: ${current_data['close']:.2f}
+                - RSI (14): {current_data['RSI_14']:.2f}
+                - MACD: {current_data['MACD_12_26_9']:.4f}
+                - Bollinger Bands: Upper {current_data['BB_upper_20']:.2f}, Middle {current_data['BB_middle_20']:.2f}, Lower {current_data['BB_lower_20']:.2f}
+                - Estocástico: %K {current_data['STOCH_K_14_3']:.2f}, %D {current_data['STOCH_D_14_3']:.2f}
+                - Trend Magic: {current_data['MagicTrend_Color']} ({current_data['MagicTrend']:.2f})
+                - Squeeze Momentum: {current_data['squeeze_color']} ({current_data['momentum_color']})
+                """
 
-    except Exception as e:
-        print(f"❌ Error al obtener datos OHLCV: {e}")
+                try:
+                    gemini = GeminiClient()
+                    analysis = gemini.analyze_market_data(data_summary)
+                    print("📊 ANÁLISIS INSTITUCIONAL GEMINI:")
+                    print("=" * 80)
+                    print(analysis["analysis"])
+                    print("=" * 80)
+                except Exception as e:
+                    print(f"❌ Error con Gemini: {e}")
 
-    print("\n🎯 Prueba completada!")
+        except Exception as e:
+            print(f"❌ Error procesando {symbol}: {e}")
 
-    # Prueba de Gemini AI
-    print("\n🤖 Probando conexión con Gemini AI...")
-    try:
-        gemini = GeminiClient()
-        response = gemini.query("¿Qué modelo de IA eres?")
-        print(f"🎯 Respuesta de Gemini: {response}")
+def main():
+    print("⚔️ BOT ESPARTANO MULTI-CRIPTO - MODO INSTITUCIONAL ⚔️")
+    print(f"📊 Símbolos: {len(SYMBOLS)} | Timeframe: {time_frame}")
+    print(f"🔄 Intervalo: {CHECK_INTERVAL_SECONDS} segundos | Loop Infinito: {ENABLE_INFINITE_LOOP}")
+    print("=" * 80)
 
-        # Análisis institucional con datos técnicos
-        print("\n🔍 Realizando análisis institucional con Gemini...")
-        current_data = df.iloc[-1]  # Última vela
-        data_summary = f"""
-        DATOS ACTUALES DE BTC/USDT (4h):
-        - Precio actual: ${current_data['close']:.2f}
-        - RSI (14): {current_data['RSI_14']:.2f}
-        - MACD: {current_data['MACD_12_26_9']:.4f}
-        - MACD Signal: {current_data['MACD_signal_12_26_9']:.4f}
-        - MACD Histogram: {current_data['MACD_hist_12_26_9']:.4f}
-        - Bollinger Bands:
-          * Upper: {current_data['BB_upper_20']:.2f}
-          * Middle: {current_data['BB_middle_20']:.2f}
-          * Lower: {current_data['BB_lower_20']:.2f}
-        - Estocástico:
-          * %K: {current_data['STOCH_K_14_3']:.2f}
-          * %D: {current_data['STOCH_D_14_3']:.2f}
-        - Trend Magic: {current_data['MagicTrend_Color']} ({current_data['MagicTrend']:.2f})
-        - Squeeze Momentum: {current_data['squeeze_color']} ({current_data['momentum_color']})
+    # Initialize strategy manager
+    strategy_manager = StrategyManager()
 
-        ESTADÍSTICAS GENERALES:
-        - Precio promedio: ${df['close'].mean():.2f}
-        - Precio máximo: ${df['high'].max():.2f}
-        - Precio mínimo: ${df['low'].min():.2f}
-        - Volumen promedio: {df['volume'].mean():.0f}
-        """
+    if ENABLE_INFINITE_LOOP:
+        print("🔥 INICIANDO MODO 24/7 - PRESIONA CTRL+C PARA DETENER")
+        iteration = 0
 
-        analysis = gemini.analyze_market_data(data_summary)
-        print("📊 ANÁLISIS INSTITUCIONAL GEMINI:")
-        print("=" * 80)
-        print(analysis["analysis"])
-        print("=" * 80)
+        while True:
+            iteration += 1
+            print(f"\n🕐 ITERACIÓN #{iteration} - {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}")
 
-    except Exception as e:
-        print(f"❌ Error con Gemini AI: {e}")
+            try:
+                process_symbols(strategy_manager)
+                print(f"\n💤 Durmiendo {CHECK_INTERVAL_SECONDS} segundos hasta próxima verificación...")
+                time.sleep(CHECK_INTERVAL_SECONDS)
+
+            except KeyboardInterrupt:
+                print("\n🛑 Bot detenido por usuario")
+                break
+            except Exception as e:
+                print(f"❌ Error en iteración {iteration}: {e}")
+                print("⏳ Esperando 30 segundos antes de reintentar...")
+                time.sleep(30)
+    else:
+        print("🔄 EJECUTANDO UNA SOLA ITERACIÓN")
+        process_symbols(strategy_manager)
+
+    print("\n🏛️ Bot finalizado exitosamente!")
 
 if __name__ == "__main__":
     main()

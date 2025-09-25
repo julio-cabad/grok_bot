@@ -55,7 +55,7 @@ class GeminiClient:
         try:
             response = self.client.generate_content(message, **kwargs)
             content = response.text
-            self.logger.info("✅ Query executed successfully")
+            self.logger.info("Query executed successfully")
             return content
 
         except Exception as e:
@@ -73,99 +73,35 @@ class GeminiClient:
             Analysis dict with insights
         """
         prompt = f"""
-        COMO TRADER INSTITUCIONAL CON 10+ AÑOS DE EXPERIENCIA, ESPECIALIZADO EN SMART MONEY CONCEPTS (SMC) Y OPERACIONES DE ALTO WIN RATE (>70%).
-        Analiza los datos técnicos proporcionados de BTC/USD en timeframe de 4h (últimas 500 velas) y genera un diagnóstico claro, conservador y accionable.
-        Tu prioridad es la preservación de capital: mejor perder una oportunidad que tomar una mala.
+        COMO TRADER INSTITUCIONAL EXPERTO, valida esta SEÑAL DE TRADING generada por algoritmo y determina las probabilidades de éxito de entrada.
         
-        📊 DATOS DISPONIBLES
+        SEÑAL A VALIDAR:
         {data_summary}
         
-        🔍 INSTRUCCIONES DE ANÁLISIS
+        INSTRUCCIONES DE VALIDACIÓN:
         
-        FAIR VALUE GAPS (FVG)
-        Identifica FVGs no rellenados (alcistas y bajistas).
-        Prioriza aquellos que coinciden con:
-        Niveles psicológicos (ej. 110k, 115k, 120k)
-        Swing points de las últimas 100 velas
-        Zonas de alto volumen (> percentil 80 del último mes)
-        Ignora FVGs en rango lateral sin confirmación.
+        1. VALIDAR SETUP TÉCNICO: Confirma si los indicadores apoyan la señal (Trend Magic, Squeeze, RSI, etc.)
         
-        SWEEPS DE LIQUIDEZ
-        Detecta sweeps válidos: wick rompe soporte/resistencia + cierre en sentido opuesto + volumen > 25% del promedio de 20 velas.
-        Clasifícalos como:
-        Bull trap: sweep arriba + cierre bajista
-        Bear trap: sweep abajo + cierre alcista
-        Confirma con divergencia oculta o cambio en MagicTrend.
+        2. ANÁLISIS DE RIESGO: Evalúa el Risk/Reward ratio y posición del stop loss
         
-        DIVERGENCIAS OCULTAS
-        Solo considera si ocurren en zonas de FVG o tras un sweep.
-        Alcista: precio hace nuevo mínimo, RSI/MACD hace higher low.
-        Bajista: precio hace nuevo máximo, RSI/MACD hace lower high.
-        Ignora divergencias en rango sin edge.
+        3. PROBABILIDADES INSTITUCIONALES: Basado en Smart Money Concepts, estima win rate (>70% alta, 50-70% media, <50% baja)
         
-        MOMENTUM Y VOLATILIDAD
-        Si Squeeze = BLACK y BB Width < 2.5%, etiqueta como "pre-expansión" → no operar hasta ruptura con volumen.
-        Si Momentum = MAROON, asume falta de impulso direccional.
-        Usa MagicTrend:
-        📤 FORMATO DE SALIDA
+        4. CONDICIONES DE ENTRADA: Define el mejor momento para entrar (precio específico, confirmación requerida)
         
-        PRIMERO: Evalúa si hay SETUP VÁLIDO con al menos 3 confirmaciones.
+        5. RECOMENDACIÓN FINAL: APROBAR o RECHAZAR la entrada con justificación
         
-        Si SÍ hay setup válido:
-        [SEÑAL SMC – {{fecha}} {{hora}} UTC]
-        • Tipo: Long / Short
-        • Zona de entrada: {{rango}}
-        • Trigger: {{evento}}
-        • Stop loss: {{precio}} ({{justificación}})
-        • Take profit 1: {{precio}} ({{zona}})
-        • Take profit 2: {{precio}} ({{zona}})
-        • R:R = {{ratio}}
-        • Probabilidad: Alta/Media/Baja
-        • Confirmación requerida: {{descripción}}
-        • Nota: {{contexto}}
+        FORMATO DE RESPUESTA:
+        VALIDACIÓN SETUP: [APROBADO/RECHAZADO] - Justificación
+        PROBABILIDAD ÉXITO: [ALTA/MEDIA/BAJA] - % estimado
+        PRECIO ENTRADA ÓPTIMO: [precio específico]
+        STOP LOSS VALIDACIÓN: [precio]
+        TAKE PROFIT SUGERIDO: [precio]
+        CONDICIONES CONFIRMACIÓN: [lista de eventos]
+        RECOMENDACIÓN: [ENTRAR/ESPERAR/RECHAZAR] - Razón final
         
-        SEGUNDO: SIEMPRE proporciona ANÁLISIS ESTADÍSTICO para ambas direcciones:
-        
-        📊 ANÁLISIS LONG:
-        • Mejor precio de entrada: {{precio óptimo basado en datos}}
-        • Punto estadístico: {{por qué este precio}}
-        • Probabilidad de éxito: {{% basado en historical edge}}
-        • Nivel de riesgo: Alto/Medio/Bajo
-        • Próxima zona de liquidez: {{precio}}
-        
-        📊 ANÁLISIS SHORT:
-        • Mejor precio de entrada: {{precio óptimo}}
-        • Punto estadístico: {{por qué}}
-        • Probabilidad de éxito: {{%}}
-        • Nivel de riesgo: Alto/Medio/Bajo
-        • Próxima zona de liquidez: {{precio}}
-        
-        Si NO hay setup claro, responde únicamente:
-        "Esperar – No hay edge estadístico. Mercado en rango sin señales SMC." 
-        
-        PERO SIEMPRE incluye el ANÁLISIS ESTADÍSTICO LONG y SHORT al final.
-        
-        Recuerda: La paciencia es tu mayor aliado. Mejor 5 trades perfectos al año que 50 mediocres.
-                
-        [SEÑAL SMC – {{fecha}} {{hora}} UTC]
-        • Tipo: Long / Short / Esperar  
-        • Zona de entrada: {{rango de precio, ej. 111.000 – 111.600}}  
-        • Trigger: {{descripción clara del evento: sweep + FVG + divergencia}}  
-        • Stop loss: {{precio exacto}} (justificación: fuera de liquidez / swing)  
-        • Take profit 1: {{precio}} (zona de liquidez / POC)  
-        • Take profit 2: {{precio}} (zona de liquidez opuesta)  
-        • R:R = {{ratio calculado}}  
-        • Probabilidad: Alta (70–80%) / Media (55–70%) / Baja (<55%)  
-        • Confirmación requerida: cierre de vela de 4h en zona + volumen > promedio  
-        • Nota: {{contexto adicional: sesión, eventos, sesgo de MagicTrend}}
-        
-        Si no hay setup claro con al menos 3 confirmaciones, responde únicamente:
-        "Esperar – No hay edge estadístico. El mercado está en rango sin señales de Smart Money." 
-        
-        Recuerda: La paciencia es tu mayor aliado. Mejor 5 trades perfectos al año que 50 mediocres.
+        Sé conservador: mejor perder oportunidad que tomar mala entrada.
         """
         response = self.query(prompt)
-
         return {
             "analysis": response,
             "model_used": self.model,

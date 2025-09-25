@@ -58,6 +58,8 @@ time_frame: str = '4h'
 
 # Número de velas a obtener por defecto
 CANDLES_LIMIT: int = 500
-
+# Bot Configuration
+CHECK_INTERVAL_SECONDS: int = 30  # Intervalo entre verificaciones en segundos (300 = 5 minutos)
+ENABLE_INFINITE_LOOP: bool = True  # Habilitar bucle infinito
 # System Configuration
 TIMEZONE: str = "America/Guayaquil"  # Ecuador timezone (UTC-5)
