@@ -8,6 +8,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from enum import Enum
 from dataclasses import dataclass
+from datetime import datetime
 
 class SignalType(Enum):
     LONG = "LONG"
@@ -58,7 +59,7 @@ class StrategyManager:
 
     def __init__(self):
         self.logger = logging.getLogger("StrategyManager")
-        self.logger.info("🏛️ Strategy Manager initialized")
+        self.logger.setLevel(logging.WARNING)
 
     def squeeze_magic_strategy(self, df: Any, symbol: str) -> TradingSignal:
         """
@@ -125,16 +126,15 @@ class StrategyManager:
                 symbol=symbol,
                 signal_type=signal_type,
                 strength=strength,
-                entry_price=entry_price,
+                entry_price=entry_price if signal_type != SignalType.WAIT else None,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
                 risk_reward_ratio=rr_ratio,
                 confidence=confidence,
-                timestamp="2025-09-25",  # Would use datetime
+                timestamp=datetime.utcnow().isoformat(),
                 reason=reason
             )
 
-            self.logger.info(f"📊 Signal generated for {symbol}: {signal_type.value} ({confidence:.1%})")
             return signal
 
         except Exception as e:
@@ -148,7 +148,7 @@ class StrategyManager:
                 take_profit=None,
                 risk_reward_ratio=None,
                 confidence=0.0,
-                timestamp="2025-09-25",
+                timestamp=datetime.utcnow().isoformat(),
                 reason=f"Error: {str(e)}"
             )
 
@@ -177,6 +177,6 @@ class StrategyManager:
                 take_profit=None,
                 risk_reward_ratio=None,
                 confidence=0.0,
-                timestamp="2025-09-25",
+                timestamp=datetime.utcnow().isoformat(),
                 reason=f"Unknown strategy: {strategy_name}"
             )

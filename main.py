@@ -15,6 +15,29 @@ import time
 # Configurar logging básico
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+COLOR_EMOJI_MAP = {
+    "LIME": "🟢",
+    "GREEN": "🥦",
+    "MAROON": "🟤",
+    "BROWN": "🟤",
+    "RED": "🔴",
+    "BLUE": "🔵",
+    "BLACK": "⚫️",
+    "GRAY": "⚪️",
+    "GREY": "⚪️"
+}
+
+
+def format_color(color: str) -> str:
+    if not color:
+        return "N/A"
+
+    color_upper = str(color).upper()
+    emoji = COLOR_EMOJI_MAP.get(color_upper)
+    if emoji:
+        return f"{emoji} {color_upper}"
+    return color_upper
+
 def process_symbols(strategy_manager: StrategyManager):
     """Process all configured symbols"""
     print(f"\n🚀 Procesando {len(SYMBOLS)} símbolos en timeframe {time_frame}...")
@@ -49,25 +72,55 @@ def process_symbols(strategy_manager: StrategyManager):
             # Execute strategy
             signal = strategy_manager.execute_strategy("squeeze_magic", df, symbol)
 
-            # Display signal
+            # Extract current indicator context
+            current_data = df.iloc[-1]
+
+            squeeze_color = current_data.get('squeeze_color', 'N/A')
+            momentum_color = current_data.get('momentum_color', 'N/A')
+            trend_magic_value = current_data.get('MagicTrend')
+            trend_magic_color = current_data.get('MagicTrend_Color', 'N/A')
+            current_price = current_data.get('close')
+
+            trend_magic_display = "N/A"
+            if trend_magic_value is not None and trend_magic_value == trend_magic_value:
+                trend_magic_display = f"{trend_magic_value:.2f}"
+
+            price_display = "N/A"
+            if current_price is not None and current_price == current_price:
+                price_display = f"${current_price:.2f}"
+
             print(f"🎯 SEÑAL: {signal.signal_type.value} | Fuerza: {signal.strength.value} | Confianza: {signal.confidence:.1%}")
-            print(f"💰 Entrada: ${signal.entry_price:.2f}" if signal.entry_price else "💰 Entrada: N/A")
-            print(f"🛑 SL: ${signal.stop_loss:.2f}" if signal.stop_loss else "🛑 SL: N/A")
-            print(f"🎯 TP: ${signal.take_profit:.2f}" if signal.take_profit else "🎯 TP: N/A")
-            print(f"📊 R/R: {signal.risk_reward_ratio:.2f}" if signal.risk_reward_ratio else "📊 R/R: N/A")
+            print(f"🎨 Squeeze: {format_color(squeeze_color)} | Momentum: {format_color(momentum_color)}")
+            print(f"🔮 Trend Magic: {format_color(trend_magic_color)} ({trend_magic_display})")
+            print(f"💹 Precio actual: {price_display}")
+
+            if signal.signal_type != SignalType.WAIT:
+                if signal.entry_price is not None and signal.entry_price == signal.entry_price:
+                    print(f"💰 Entrada: ${signal.entry_price:.2f}")
+                if signal.stop_loss is not None and signal.stop_loss == signal.stop_loss:
+                    print(f"🛑 SL: ${signal.stop_loss:.2f}")
+                if signal.take_profit is not None and signal.take_profit == signal.take_profit:
+                    print(f"🎯 TP: ${signal.take_profit:.2f}")
+                if signal.risk_reward_ratio is not None and signal.risk_reward_ratio == signal.risk_reward_ratio:
+                    print(f"📊 R/R: {signal.risk_reward_ratio:.2f}")
+
             print(f"📝 Razón: {signal.reason}")
 
             # AI Analysis only if valid signal (LONG/SHORT)
             if signal.signal_type != SignalType.WAIT:
                 print("\n🤖 ACTIVANDO ANÁLISIS INSTITUCIONAL GEMINI...")
-                current_data = df.iloc[-1]
+                entry = signal.entry_price if signal.entry_price is not None else current_price
+                sl = signal.stop_loss if signal.stop_loss is not None else current_price
+                tp = signal.take_profit if signal.take_profit is not None else current_price
+                rr = signal.risk_reward_ratio if signal.risk_reward_ratio is not None else 0.0
+
                 data_summary = f"""
                 SEÑAL GENERADA PARA {symbol}:
                 - Tipo: {signal.signal_type.value}
-                - Precio Entrada: ${signal.entry_price:.2f}
-                - Stop Loss: ${signal.stop_loss:.2f}
-                - Take Profit: ${signal.take_profit:.2f}
-                - Risk/Reward: {signal.risk_reward_ratio:.2f}
+                - Precio Entrada: ${entry:.2f}
+                - Stop Loss: ${sl:.2f}
+                - Take Profit: ${tp:.2f}
+                - Risk/Reward: {rr:.2f}
                 - Confianza: {signal.confidence:.1%}
                 - Razón: {signal.reason}
 

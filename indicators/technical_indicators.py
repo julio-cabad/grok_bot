@@ -33,6 +33,7 @@ class TechnicalAnalyzer:
         self.symbol = symbol.upper()
         self.timeframe = timeframe
         self.logger = logging.getLogger(f"TechnicalAnalyzer-{self.symbol}")
+        self.logger.setLevel(logging.WARNING)
         self.binance_client = RobotBinance(pair=self.symbol, temporality=self.timeframe)
         self.df = None
 
