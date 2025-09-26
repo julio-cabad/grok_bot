@@ -6,13 +6,16 @@ High-performance, scalable strategies for multi-crypto institutional trading
 
 import logging
 import sys
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, TYPE_CHECKING
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config.settings import TIMEZONE
+from config.settings import TIMEZONE, POSITION_SIZE, time_frame, taker_fee
+
+if TYPE_CHECKING:
+    from notifications.telegram_notifier import TelegramNotifier
 
 class SignalType(Enum):
     LONG = "LONG"
@@ -67,12 +70,23 @@ class StrategyManager:
     LONG_SQUEEZE_COLORS = {"MAROON", "LIME"}
     SHORT_SQUEEZE_COLORS = {"RED", "GREEN"}
 
-    def __init__(self):
+    def __init__(
+        self,
+        notifier: Optional["TelegramNotifier"] = None,
+        notify_on_open: bool = False,
+        notify_on_close: bool = False,
+        notify_alerts: bool = False,
+    ):
         self.logger = logging.getLogger("StrategyManager")
         self.logger.setLevel(logging.WARNING)
         self.last_alerted_signal: Dict[str, SignalType] = {}
         self.open_positions: Dict[str, Dict[str, Any]] = {}
+        self.notifier = notifier
+        self.notify_on_open = notify_on_open and notifier is not None
+        self.notify_on_close = notify_on_close and notifier is not None
+        self.notify_alerts = notify_alerts and notifier is not None
         self.timezone = ZoneInfo(TIMEZONE)
+        self.fee_rate = taker_fee
 
     def _trigger_alert(self, symbol: str, signal_type: SignalType, reason: str) -> None:
         """Play an audible alert and log the new trading signal."""
@@ -84,6 +98,127 @@ class StrategyManager:
         label = "Cierre" if signal_type == SignalType.EXIT else "Señal"
         print(f"🔔 ALERTA ESPARTANA {symbol}: {label} {signal_type.value}")
         print(f"   ➤ Motivo: {reason}")
+
+        should_notify_alert = self.notifier and self.notify_alerts
+
+        if should_notify_alert:
+            if signal_type in (SignalType.LONG, SignalType.SHORT) and self.notify_on_open:
+                should_notify_alert = False
+            elif signal_type == SignalType.EXIT and self.notify_on_close:
+                should_notify_alert = False
+
+        if should_notify_alert:
+            try:
+                title = f"{label.upper()} {signal_type.value}"
+                body = f"{symbol}: {reason}"
+                self.notifier.notify_alert(title=title, message=body)
+            except Exception as exc:
+                self.logger.error(f"Telegram alert notification failed for {symbol}: {exc}")
+
+    def _calculate_quantity(self, entry_price: Optional[float]) -> Optional[float]:
+        if entry_price is None or entry_price <= 0:
+            return None
+        try:
+            return POSITION_SIZE / entry_price
+        except ZeroDivisionError:
+            return None
+
+    def _notify_position_opened(
+        self,
+        symbol: str,
+        signal_type: SignalType,
+        entry_price: Optional[float],
+        stop_loss: Optional[float],
+        take_profit: Optional[float],
+    ) -> None:
+        if not (self.notifier and self.notify_on_open):
+            return
+
+        quantity = self._calculate_quantity(entry_price)
+        if quantity is None or entry_price is None:
+            return
+
+        try:
+            self.notifier.notify_position_opened(
+                symbol=symbol,
+                side=signal_type.value,
+                entry_price=entry_price,
+                quantity=quantity,
+                stop_loss=stop_loss if stop_loss is not None else 0.0,
+                take_profit=take_profit if take_profit is not None else 0.0,
+                timeframe=time_frame,
+            )
+        except Exception as exc:
+            self.logger.error(f"Telegram open notification failed for {symbol}: {exc}")
+
+    def _notify_position_closed(
+        self,
+        symbol: str,
+        position: Dict[str, Any],
+        close_price: Optional[float],
+        exit_reason: str,
+    ) -> None:
+        if not (self.notifier and self.notify_on_close):
+            return
+
+        if close_price is None:
+            return
+
+        entry_price = position.get('entry_price')
+        if entry_price is None or entry_price <= 0:
+            return
+
+        quantity = position.get('quantity')
+        if quantity is None:
+            quantity = self._calculate_quantity(entry_price)
+
+        if quantity is None or quantity <= 0:
+            return
+
+        entry_time_dt = position.get('opened_at_dt')
+        if entry_time_dt is None:
+            entry_str = position.get('opened_at')
+            if entry_str:
+                try:
+                    entry_time_dt = datetime.strptime(entry_str, "%Y-%m-%d %H:%M").replace(tzinfo=self.timezone)
+                except ValueError:
+                    entry_time_dt = datetime.now(self.timezone)
+            else:
+                entry_time_dt = datetime.now(self.timezone)
+
+        exit_time_dt = datetime.now(self.timezone)
+
+        if position['type'] == SignalType.LONG:
+            gross_pnl = (close_price - entry_price) * quantity
+        else:
+            gross_pnl = (entry_price - close_price) * quantity
+
+        total_commissions = (entry_price + close_price) * quantity * self.fee_rate
+        real_pnl = gross_pnl - total_commissions
+
+        reason_code_map = {
+            "EXIT STOP LOSE": "STOP_LOSS",
+            "EXIT BY COLOR": "COLOR_CHANGE",
+        }
+        close_reason = reason_code_map.get(exit_reason, exit_reason.replace(" ", "_").upper())
+
+        try:
+            self.notifier.notify_position_closed(
+                symbol=symbol,
+                side=position['type'].value,
+                entry_price=entry_price,
+                exit_price=close_price,
+                quantity=quantity,
+                gross_pnl=gross_pnl,
+                real_pnl=real_pnl,
+                total_commissions=total_commissions,
+                close_reason=close_reason,
+                entry_time=entry_time_dt,
+                exit_time=exit_time_dt,
+                timeframe=time_frame,
+            )
+        except Exception as exc:
+            self.logger.error(f"Telegram close notification failed for {symbol}: {exc}")
 
     def squeeze_magic_strategy(self, df: Any, symbol: str) -> TradingSignal:
         """
@@ -113,6 +248,8 @@ class StrategyManager:
             take_profit = None
             rr_ratio = None
             entry_time_str = None
+            entry_time_dt = None
+            position_quantity = None
 
             if position:
                 entry_price = position.get('entry_price')
@@ -120,6 +257,8 @@ class StrategyManager:
                 take_profit = position.get('take_profit')
                 rr_ratio = position.get('risk_reward')
                 entry_time_str = position.get('opened_at')
+                entry_time_dt = position.get('opened_at_dt')
+                position_quantity = position.get('quantity')
 
             signal_type = SignalType.WAIT
             strength = SignalStrength.WEAK
@@ -152,6 +291,8 @@ class StrategyManager:
                         exit_reason = "EXIT BY COLOR"
 
                 if exit_reason:
+                    if position and self.notifier and self.notify_on_close:
+                        self._notify_position_closed(symbol, position, close_price, exit_reason)
                     signal_type = SignalType.EXIT
                     strength = SignalStrength.STRONG
                     confidence = 0.8
@@ -192,7 +333,9 @@ class StrategyManager:
                         rr_ratio = reward / risk if risk > 0 else None
 
                     entry_price = close_price
-                    entry_time_str = datetime.now(self.timezone).strftime("%Y-%m-%d %H:%M")
+                    entry_time_dt = datetime.now(self.timezone)
+                    entry_time_str = entry_time_dt.strftime("%Y-%m-%d %H:%M")
+                    quantity = self._calculate_quantity(entry_price)
                     self.open_positions[symbol] = {
                         'type': signal_type,
                         'entry_price': entry_price,
@@ -200,7 +343,17 @@ class StrategyManager:
                         'take_profit': take_profit,
                         'risk_reward': rr_ratio,
                         'opened_at': entry_time_str,
+                        'opened_at_dt': entry_time_dt,
+                        'quantity': quantity,
                     }
+                    if self.notifier and self.notify_on_open:
+                        self._notify_position_opened(
+                            symbol,
+                            signal_type,
+                            entry_price,
+                            stop_loss,
+                            take_profit,
+                        )
                 elif signal_type in (SignalType.LONG, SignalType.SHORT):
                     signal_type = SignalType.WAIT
                     strength = SignalStrength.WEAK

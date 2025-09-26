@@ -11,6 +11,15 @@ from indicators.technical_indicators import TechnicalAnalyzer
 from ai.kimi_client import GeminiClient
 from strategy.strategies import StrategyManager, SignalType
 from presenters.console_table import render_table
+from notifications.telegram_config import (
+    ENABLE_NOTIFICATIONS,
+    TELEGRAM_TOKEN,
+    TELEGRAM_CHAT_ID,
+    NOTIFY_POSITION_OPENED,
+    NOTIFY_POSITION_CLOSED,
+    NOTIFY_ALERTS,
+)
+from notifications.telegram_notifier import TelegramNotifier
 import time
 
 # Configurar logging básico
@@ -180,8 +189,28 @@ def main():
     print(f"🔄 Intervalo: {CHECK_INTERVAL_SECONDS} segundos | Loop Infinito: {ENABLE_INFINITE_LOOP}")
     print("=" * 80)
 
+    notifier = None
+    notify_open = False
+    notify_close = False
+    notify_alerts = False
+
+    if ENABLE_NOTIFICATIONS:
+        try:
+            notifier = TelegramNotifier(token=TELEGRAM_TOKEN, chat_id=TELEGRAM_CHAT_ID)
+            notify_open = NOTIFY_POSITION_OPENED
+            notify_close = NOTIFY_POSITION_CLOSED
+            notify_alerts = NOTIFY_ALERTS
+        except Exception as exc:
+            logging.error(f"No se pudo inicializar TelegramNotifier: {exc}")
+            notifier = None
+
     # Initialize strategy manager
-    strategy_manager = StrategyManager()
+    strategy_manager = StrategyManager(
+        notifier=notifier,
+        notify_on_open=notify_open,
+        notify_on_close=notify_close,
+        notify_alerts=notify_alerts,
+    )
 
     if ENABLE_INFINITE_LOOP:
         print("🔥 INICIANDO MODO 24/7 - PRESIONA CTRL+C PARA DETENER")
