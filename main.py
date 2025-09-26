@@ -8,7 +8,7 @@ import logging
 from config.settings import *
 from bnb.binance import RobotBinance
 from indicators.technical_indicators import TechnicalAnalyzer
-from ai.kimi_client import GeminiClient
+from ai.gemini_client import GeminiClient
 from strategy.strategies import StrategyManager, SignalType
 from presenters.console_table import render_table
 from monitoring.performance_monitor import get_performance_monitor, TimingContext

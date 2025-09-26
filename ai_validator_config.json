@@ -1,0 +1,30 @@
+{
+  "confidence_threshold": 8.0,
+  "timeout_seconds": 30,
+  "max_retries": 3,
+  "use_threading": true,
+  "default_risk_percentage": 0.5,
+  "max_risk_percentage": 2.0,
+  "min_risk_reward_ratio": 1.5,
+  "position_size_limits": [
+    0.1,
+    10.0
+  ],
+  "high_volatility_reduction": 0.5,
+  "low_volatility_increase": 1.2,
+  "volatility_lookback_periods": 20,
+  "order_block_lookback": 20,
+  "fvg_min_gap_percentage": 0.1,
+  "premium_threshold": 0.705,
+  "discount_threshold": 0.295,
+  "liquidity_detection_periods": 50,
+  "cache_ttl_minutes": 5,
+  "cache_max_size": 1000,
+  "cache_cleanup_frequency": 100,
+  "max_concurrent_analyses": 5,
+  "memory_limit_mb": 500,
+  "performance_monitoring": true,
+  "notify_high_confidence": true,
+  "notify_warnings": true,
+  "detailed_analysis_in_notifications": true
+}

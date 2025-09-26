@@ -13,7 +13,9 @@ from decimal import Decimal
 import pandas as pd
 
 # Import existing AI client
-from ai.kimi_client import GeminiClient
+from ai.gemini_client import GeminiClient
+# Import fast SMC analyzer
+from ai.modules.fast_smc_analyzer import FastSMCAnalyzer
 
 
 @dataclass
@@ -94,16 +96,17 @@ class SmartCache:
 
 
 class AIValidator:
-    """Ultra simple IA validator with smart caching"""
+    """Ultra simple IA validator with smart caching and fast SMC analysis"""
     
     def __init__(self, timeout_seconds: int = 30, confidence_threshold: float = 7.5):
         self.gemini_client = GeminiClient()
         self.cache = SmartCache(ttl_minutes=5)
         self.timeout = timeout_seconds
         self.confidence_threshold = confidence_threshold
+        self.smc_analyzer = FastSMCAnalyzer()  # Initialize fast SMC analyzer
         self.logger = logging.getLogger("AIValidator")
         
-        self.logger.info(f"🤖 AIValidator initialized - Timeout: {timeout_seconds}s, Threshold: {confidence_threshold}")
+        self.logger.info(f"🤖 AIValidator initialized - Timeout: {timeout_seconds}s, Threshold: {confidence_threshold}, Fast SMC: ✅")
     
     def validate_signal(self, df: pd.DataFrame, symbol: str, signal_type: str) -> ValidationResult:
         """
@@ -170,7 +173,7 @@ class AIValidator:
         return f"{symbol}_{signal_type}_{data_hash}"
     
     def _build_smc_prompt(self, df: pd.DataFrame, symbol: str, signal_type: str) -> str:
-        """Build comprehensive SMC analysis prompt"""
+        """Build comprehensive SMC analysis prompt with real SMC data"""
         
         # Get current price and recent data
         current_price = df['close'].iloc[-1]
@@ -183,57 +186,232 @@ class AIValidator:
         price_change_pct = ((current_price - df['close'].iloc[-2]) / df['close'].iloc[-2]) * 100
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
         
+        # Get REAL SMC analysis using fast analyzer
+        smc_data = self.smc_analyzer.analyze_fast(df)
+        
+        # Format SMC analysis
+        smc_analysis = self._format_smc_data(smc_data)
+        
         # Get last 50 candles for analysis
         analysis_data = df.tail(50)
         
+        # Get technical indicators for confluence analysis
+        technical_indicators = self._format_technical_indicators(df)
+        
         prompt = f"""
-SMART MONEY CONCEPTS ANALYSIS - {symbol}
+🏛️ SPARTAN MILLIONAIRE TRADING SYSTEM 🏛️
+Elite Smart Money Concepts + Multi-Indicator Confluence Analysis
 
-SIGNAL TO VALIDATE: {signal_type}
-CURRENT PRICE: ${current_price:.4f}
-PRICE CHANGE: {price_change_pct:+.2f}%
-VOLUME RATIO: {volume_ratio:.2f}x average
+📊 SYMBOL: {symbol} | SIGNAL: {signal_type}
+💰 CURRENT PRICE: ${current_price:.4f} | CHANGE: {price_change_pct:+.2f}%
+📈 VOLUME: {volume_ratio:.2f}x average | HIGH: ${recent_high:.4f} | LOW: ${recent_low:.4f}
 
-RECENT MARKET DATA (Last 50 candles):
-High: ${recent_high:.4f} | Low: ${recent_low:.4f}
-Current Volume: {current_volume:,.0f} | Avg Volume: {avg_volume:,.0f}
+🏛️ REAL SMC ANALYSIS (INSTITUTIONAL DATA):
+{smc_analysis}
 
-OHLCV DATA FOR ANALYSIS:
+🤖 TECHNICAL INDICATORS CONFLUENCE:
+{technical_indicators}
+
+📊 OHLCV DATA (Last 50 candles):
 {analysis_data[['open', 'high', 'low', 'close', 'volume']].to_string()}
 
-SMART MONEY ANALYSIS REQUIRED:
+🏛️ INSTITUTIONAL ANALYSIS FRAMEWORK (WEIGHTED SCORING):
 
-1. ORDER BLOCKS: Identify institutional supply/demand zones
-2. FAIR VALUE GAPS: Detect price imbalances that need to be filled
-3. LIQUIDITY SWEEPS: Check for stop hunt patterns above/below key levels
-4. MARKET STRUCTURE: Analyze break of structure (BOS) or change of character (CHoCH)
-5. SUPPORT/RESISTANCE: Identify key institutional levels
-6. VOLUME PROFILE: Analyze volume at key price levels
+1. SMC STRUCTURE ANALYSIS (35% WEIGHT):
+   ✅ Order Blocks: Institutional supply/demand zones
+   ✅ Fair Value Gaps: Price imbalances requiring fills  
+   ✅ Liquidity Sweeps: Stop hunts above/below key levels
+   ✅ Market Structure: BOS/CHoCH patterns
+   ✅ Support/Resistance: Key institutional levels
 
-CONTEXT FOR {signal_type} SIGNAL:
-- Technical indicators already suggest {signal_type} opportunity
-- Need SMC confirmation for institutional alignment
-- Looking for confluence between technical and smart money concepts
+2. MOMENTUM ANALYSIS (25% WEIGHT):
+   ✅ MACD: Histogram strength, signal crossovers, divergences
+   ✅ Trend alignment with price action
+   ✅ Momentum sustainability assessment
 
-PROVIDE ANALYSIS IN THIS EXACT FORMAT:
+3. MEAN REVERSION ANALYSIS (20% WEIGHT):
+   ✅ Stochastic: Overbought/oversold conditions
+   ✅ %K/%D positioning and crossovers  
+   ✅ Reversal probability assessment
 
-SCORE: [0-10 confidence score]
-ENTER: [YES/NO - should we take this trade?]
-REASONING: [Brief explanation of key SMC factors - max 100 words]
-ENTRY: [Optimal entry price if applicable]
-SL: [Suggested stop loss level]
-TP: [Suggested take profit level]
+4. VOLATILITY ANALYSIS (20% WEIGHT):
+   ✅ Bollinger Bands: Price position relative to bands
+   ✅ Squeeze/expansion patterns
+   ✅ Volatility breakout potential
 
-ANALYSIS CRITERIA:
-- Score 8-10: Strong SMC confluence, high probability setup
-- Score 6-7: Moderate SMC support, acceptable risk
-- Score 4-5: Neutral/mixed signals, proceed with caution
-- Score 0-3: SMC against the trade, avoid entry
+🎯 CONFLUENCE REQUIREMENTS FOR {signal_type}:
+- SMC structure MUST align with technical direction
+- Minimum 3/4 indicators showing confluence
+- Risk/reward ratio minimum 1:2
+- Clear institutional footprints present
 
+📋 PROVIDE ANALYSIS IN EXACT FORMAT:
+
+SCORE: [0-10 weighted confluence score]
+ENTER: [YES/NO based on confluence threshold]
+REASONING: [Key confluence factors focusing on institutional behavior - max 150 words]
+ENTRY: [Optimal entry price based on confluence zones]
+SL: [Stop loss at key institutional level]
+TP: [Take profit at next major liquidity zone]
+
+🏆 MILLIONAIRE SCORING CRITERIA:
+- Score 9-10: PERFECT confluence, all 4 indicators aligned, institutional setup confirmed
+- Score 8-8.9: EXCELLENT confluence, 3-4 indicators aligned, strong probability setup
+- Score 7-7.9: GOOD confluence, 2-3 indicators aligned, acceptable risk setup
+- Score 6-6.9: MODERATE confluence, mixed signals, proceed with extreme caution
+- Score 0-5.9: POOR confluence, conflicting signals, AVOID TRADE
+
+🎯 MISSION: Identify MILLIONAIRE-MAKING setups with institutional precision!
+Analyze CONFLUENCE between SMC + MACD + STOCHASTIC + BOLLINGER for maximum edge.
 Focus on INSTITUTIONAL behavior patterns and SMART MONEY footprints.
 """
         
         return prompt
+    
+    def _format_technical_indicators(self, df: pd.DataFrame) -> str:
+        """Format technical indicators for AI analysis"""
+        try:
+            latest = df.iloc[-1]
+            prev = df.iloc[-2]
+            
+            # MACD Analysis (using correct column names)
+            macd_line = latest.get('MACD_12_26_9', 0)
+            macd_signal = latest.get('MACD_signal_12_26_9', 0)  # Fixed: was MACDs_12_26_9
+            macd_histogram = latest.get('MACD_hist_12_26_9', 0)  # Fixed: was MACDh_12_26_9
+            macd_trend = "BULLISH" if macd_histogram > 0 else "BEARISH"
+            macd_strength = abs(macd_histogram)
+            
+            # MACD Crossover detection
+            prev_macd = prev.get('MACD_12_26_9', 0)
+            prev_signal = prev.get('MACD_signal_12_26_9', 0)  # Fixed: was MACDs_12_26_9
+            macd_crossover = ""
+            if macd_line > macd_signal and prev_macd <= prev_signal:
+                macd_crossover = "BULLISH CROSSOVER"
+            elif macd_line < macd_signal and prev_macd >= prev_signal:
+                macd_crossover = "BEARISH CROSSOVER"
+            else:
+                macd_crossover = "NO CROSSOVER"
+            
+            # Stochastic Analysis (using correct column names)
+            stoch_k = latest.get('STOCH_K_14_3', 50)
+            stoch_d = latest.get('STOCH_D_14_3', 50)
+            stoch_condition = "OVERBOUGHT" if stoch_k > 80 else "OVERSOLD" if stoch_k < 20 else "NEUTRAL"
+            stoch_crossover = "K>D (BULLISH)" if stoch_k > stoch_d else "K<D (BEARISH)"
+            
+            # Bollinger Bands Analysis (using correct column names)
+            bb_upper = latest.get('BB_upper_20', latest.get('close', 0))
+            bb_middle = latest.get('BB_middle_20', latest.get('close', 0))  
+            bb_lower = latest.get('BB_lower_20', latest.get('close', 0))
+            close_price = latest.get('close', 0)
+            
+            if close_price > bb_upper:
+                bb_position = "ABOVE UPPER BAND (OVERBOUGHT)"
+            elif close_price < bb_lower:
+                bb_position = "BELOW LOWER BAND (OVERSOLD)"
+            elif close_price > bb_middle:
+                bb_position = "UPPER HALF (BULLISH BIAS)"
+            else:
+                bb_position = "LOWER HALF (BEARISH BIAS)"
+                
+            bb_width = ((bb_upper - bb_lower) / bb_middle) * 100 if bb_middle > 0 else 0
+            bb_squeeze = "SQUEEZE (LOW VOLATILITY)" if bb_width < 2.0 else "EXPANSION (HIGH VOLATILITY)"
+            
+            # Calculate Bollinger %B (position within bands)
+            bb_percent = ((close_price - bb_lower) / (bb_upper - bb_lower)) * 100 if (bb_upper - bb_lower) > 0 else 50
+            
+            indicators_text = f"""
+📊 MOMENTUM INDICATORS (25% Weight):
+   • MACD Line: {macd_line:.4f} | Signal: {macd_signal:.4f} | Histogram: {macd_histogram:.4f}
+   • Trend: {macd_trend} | Strength: {macd_strength:.4f} | Status: {macd_crossover}
+   
+📊 MEAN REVERSION INDICATORS (20% Weight):
+   • Stochastic %K: {stoch_k:.1f}% | %D: {stoch_d:.1f}%
+   • Condition: {stoch_condition} | Signal: {stoch_crossover}
+   
+📊 VOLATILITY INDICATORS (20% Weight):
+   • Bollinger Position: {bb_position}
+   • BB %B: {bb_percent:.1f}% | Width: {bb_width:.2f}% | State: {bb_squeeze}
+   • Upper: ${bb_upper:.4f} | Middle: ${bb_middle:.4f} | Lower: ${bb_lower:.4f}
+"""
+            
+            return indicators_text
+            
+        except Exception as e:
+            return f"Technical indicators formatting error: {str(e)}"
+    
+    def _format_smc_data(self, smc_data: Dict[str, Any]) -> str:
+        """Format real SMC analysis data for AI prompt"""
+        try:
+            # Order Blocks
+            ob_bull = smc_data.get('ob_bull')
+            ob_bear = smc_data.get('ob_bear')
+            ob_text = "ORDER BLOCKS (INSTITUTIONAL ZONES):\n"
+            if ob_bull:
+                ob_text += f"   • BULLISH OB: ${ob_bull:.4f} (Support Zone)\n"
+            if ob_bear:
+                ob_text += f"   • BEARISH OB: ${ob_bear:.4f} (Resistance Zone)\n"
+            if not ob_bull and not ob_bear:
+                ob_text += "   • No significant order blocks detected\n"
+            
+            # Fair Value Gaps
+            fvg_bull = smc_data.get('fvg_bull', [])
+            fvg_bear = smc_data.get('fvg_bear', [])
+            fvg_text = "\nFAIR VALUE GAPS (PRICE IMBALANCES):\n"
+            if fvg_bull:
+                for fvg in fvg_bull[:2]:  # Show top 2
+                    fvg_text += f"   • BULLISH FVG: ${fvg['lower']:.4f} - ${fvg['upper']:.4f} (Strength: {fvg['strength']})\n"
+            if fvg_bear:
+                for fvg in fvg_bear[:2]:  # Show top 2
+                    fvg_text += f"   • BEARISH FVG: ${fvg['lower']:.4f} - ${fvg['upper']:.4f} (Strength: {fvg['strength']})\n"
+            if not fvg_bull and not fvg_bear:
+                fvg_text += "   • No unfilled FVGs detected\n"
+            
+            # Premium/Discount Zones
+            current_zone = smc_data.get('current_zone', 'EQUILIBRIUM')
+            optimal_action = smc_data.get('optimal_action', 'WAIT')
+            zone_pct = smc_data.get('zone_percentage', 50.0)
+            pd_text = f"\nPREMIUM/DISCOUNT ANALYSIS:\n"
+            pd_text += f"   • Current Zone: {current_zone} ({zone_pct:.1f}%)\n"
+            pd_text += f"   • Optimal Action: {optimal_action}\n"
+            pd_text += f"   • Premium Level: ${smc_data.get('premium_level', 0):.4f}\n"
+            pd_text += f"   • Discount Level: ${smc_data.get('discount_level', 0):.4f}\n"
+            
+            # Liquidity Levels
+            liq_resistance = smc_data.get('liq_resistance', 0)
+            liq_support = smc_data.get('liq_support', 0)
+            liq_text = f"\nLIQUIDITY LEVELS:\n"
+            liq_text += f"   • Resistance: ${liq_resistance:.4f}\n"
+            liq_text += f"   • Support: ${liq_support:.4f}\n"
+            
+            # Break of Structure
+            bos_levels = smc_data.get('bos_levels', [])
+            structure_breaks = smc_data.get('structure_breaks', 0)
+            bos_text = f"\nBREAK OF STRUCTURE:\n"
+            bos_text += f"   • Structure Breaks: {structure_breaks}\n"
+            if bos_levels:
+                bos_text += f"   • Recent BOS Level: ${bos_levels[-1]:.4f}\n"
+            
+            # SMC Confluence
+            confluence_score = smc_data.get('smc_confluence_score', 5.0)
+            institutional_bias = smc_data.get('institutional_bias', 'NEUTRAL')
+            confluence_text = f"\nSMC CONFLUENCE ANALYSIS:\n"
+            confluence_text += f"   • Confluence Score: {confluence_score:.1f}/10\n"
+            confluence_text += f"   • Institutional Bias: {institutional_bias}\n"
+            
+            # Market Context
+            current_price = smc_data.get('current_price', 0)
+            analysis_time = smc_data.get('analysis_time', 0)
+            context_text = f"\nMARKET CONTEXT:\n"
+            context_text += f"   • Current Price: ${current_price:.4f}\n"
+            context_text += f"   • Analysis Time: {analysis_time:.4f}s\n"
+            context_text += f"   • Order Blocks Found: {len(smc_data.get('order_blocks', []))}\n"
+            context_text += f"   • FVGs Found: {len(smc_data.get('fair_value_gaps', []))}\n"
+            
+            return ob_text + fvg_text + pd_text + liq_text + bos_text + confluence_text + context_text
+            
+        except Exception as e:
+            self.logger.error(f"SMC data formatting error: {e}")
+            return "SMC analysis data unavailable"
     
     def _get_ai_analysis_with_timeout(self, prompt: str) -> str:
         """Get AI analysis with timeout protection"""

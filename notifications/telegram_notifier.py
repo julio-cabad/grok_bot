@@ -91,31 +91,35 @@ class TelegramNotifier:
             reward = abs(entry_price - take_profit)
             rr_ratio = reward / risk if risk > 0 else 0
             
-            # AI Score emoji and text
+            # AI Score emoji and text with MILLIONAIRE styling
             ai_section = ""
             if ai_score is not None:
-                if ai_score >= 8.0:
+                if ai_score >= 9.0:
+                    score_emoji = "💎"
+                    score_text = "PERFECT CONFLUENCE"
+                elif ai_score >= 8.0:
                     score_emoji = "🟢"
-                    score_text = "EXCELLENT"
+                    score_text = "EXCELLENT SETUP"
                 elif ai_score >= 7.0:
                     score_emoji = "🟡"
-                    score_text = "GOOD"
+                    score_text = "GOOD OPPORTUNITY"
                 elif ai_score >= 6.0:
                     score_emoji = "🟠"
-                    score_text = "MODERATE"
+                    score_text = "MODERATE RISK"
                 else:
                     score_emoji = "🔴"
-                    score_text = "LOW"
+                    score_text = "HIGH RISK"
                 
                 ai_section = f"""
-🤖 <b>AI SMC ANALYSIS:</b>
-{score_emoji} <b>Score:</b> {ai_score:.1f}/10 ({score_text})"""
+🏛️ <b>SPARTAN AI CONFLUENCE:</b>
+{score_emoji} <b>Score:</b> {ai_score:.1f}/10 ({score_text})
+📊 <b>Analysis:</b> SMC + MACD + Stochastic + Bollinger"""
                 
                 if ai_reasoning:
                     # Truncate reasoning if too long
-                    short_reasoning = ai_reasoning[:150] + "..." if len(ai_reasoning) > 150 else ai_reasoning
+                    short_reasoning = ai_reasoning[:120] + "..." if len(ai_reasoning) > 120 else ai_reasoning
                     ai_section += f"""
-💭 <b>Reasoning:</b> {short_reasoning}"""
+💭 <b>Confluence:</b> {short_reasoning}"""
             
             # Create message
             message = f"""
