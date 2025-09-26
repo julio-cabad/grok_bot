@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config.settings import TIMEZONE, POSITION_SIZE, time_frame, taker_fee
+from config.settings import TIMEZONE, POSITION_SIZE, time_frame, taker_fee, USE_AI_VALIDATION, AI_CONFIDENCE_THRESHOLD, AI_TIMEOUT_SECONDS
 
 if TYPE_CHECKING:
     from notifications.telegram_notifier import TelegramNotifier
@@ -87,6 +87,20 @@ class StrategyManager:
         self.notify_alerts = notify_alerts and notifier is not None
         self.timezone = ZoneInfo(TIMEZONE)
         self.fee_rate = taker_fee
+        
+        # Initialize AI Validator if enabled
+        self.ai_validator = None
+        if USE_AI_VALIDATION:
+            try:
+                from ai.ai_validator import AIValidator
+                self.ai_validator = AIValidator(
+                    timeout_seconds=AI_TIMEOUT_SECONDS,
+                    confidence_threshold=AI_CONFIDENCE_THRESHOLD
+                )
+                self.logger.info(f"🤖 AI Validator initialized - Threshold: {AI_CONFIDENCE_THRESHOLD}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to initialize AI Validator: {e}")
+                self.ai_validator = None
 
     def _trigger_alert(self, symbol: str, signal_type: SignalType, reason: str) -> None:
         """Play an audible alert and log the new trading signal."""
@@ -130,6 +144,8 @@ class StrategyManager:
         entry_price: Optional[float],
         stop_loss: Optional[float],
         take_profit: Optional[float],
+        ai_score: Optional[float] = None,
+        ai_reasoning: Optional[str] = None,
     ) -> None:
         if not (self.notifier and self.notify_on_open):
             return
@@ -147,6 +163,8 @@ class StrategyManager:
                 stop_loss=stop_loss if stop_loss is not None else 0.0,
                 take_profit=take_profit if take_profit is not None else 0.0,
                 timeframe=time_frame,
+                ai_score=ai_score,
+                ai_reasoning=ai_reasoning,
             )
         except Exception as exc:
             self.logger.error(f"Telegram open notification failed for {symbol}: {exc}")
@@ -316,6 +334,53 @@ class StrategyManager:
                     reason = "SHORT"
 
                 if signal_type in (SignalType.LONG, SignalType.SHORT) and close_price is not None:
+                    
+                    # 🤖 AI VALIDATION - Only if enabled
+                    ai_result = None
+                    if self.ai_validator is not None:
+                        try:
+                            self.logger.info(f"🤖 Validating {signal_type.value} signal for {symbol} with AI SMC...")
+                            ai_result = self.ai_validator.validate_signal(df, symbol, signal_type.value)
+                            
+                            if not ai_result.should_enter:
+                                # AI rejected the trade
+                                self.logger.warning(
+                                    f"🚫 AI REJECTED {signal_type.value} for {symbol}: "
+                                    f"Score={ai_result.confidence:.1f}, Reason={ai_result.reasoning}"
+                                )
+                                
+                                # Return WAIT signal with AI reasoning
+                                signal = TradingSignal(
+                                    symbol=symbol,
+                                    signal_type=SignalType.WAIT,
+                                    strength=SignalStrength.WEAK,
+                                    entry_price=None,
+                                    stop_loss=None,
+                                    take_profit=None,
+                                    risk_reward_ratio=None,
+                                    confidence=ai_result.confidence / 10.0,  # Convert to 0-1 scale
+                                    timestamp=datetime.utcnow().isoformat(),
+                                    reason=f"AI_REJECTED: {ai_result.reasoning}",
+                                    position_opened_at=None,
+                                )
+                                return signal
+                            else:
+                                # AI approved the trade
+                                self.logger.info(
+                                    f"✅ AI APPROVED {signal_type.value} for {symbol}: "
+                                    f"Score={ai_result.confidence:.1f}, Time={ai_result.analysis_time:.1f}s"
+                                )
+                                # Update confidence and reason with AI input
+                                confidence = min(0.9, ai_result.confidence / 10.0)  # Convert to 0-1, cap at 0.9
+                                reason = f"{signal_type.value}_AI_APPROVED"
+                                
+                        except Exception as e:
+                            # AI validation failed, continue with technical analysis
+                            self.logger.error(f"❌ AI validation failed for {symbol}: {e}")
+                            self.logger.info(f"📊 Continuing with technical analysis for {symbol}")
+                            ai_result = None
+                    
+                    # Calculate position sizing and levels (original logic)
                     atr = current_data.get('ATR')
                     if atr is None:
                         atr = close_price * 0.02
@@ -353,7 +418,10 @@ class StrategyManager:
                             entry_price,
                             stop_loss,
                             take_profit,
+                            ai_score=ai_result.confidence if ai_result else None,
+                            ai_reasoning=ai_result.reasoning if ai_result else None,
                         )
+          
                 elif signal_type in (SignalType.LONG, SignalType.SHORT):
                     signal_type = SignalType.WAIT
                     strength = SignalStrength.WEAK

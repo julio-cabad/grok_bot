@@ -3,6 +3,7 @@ import pandas as pd
 import logging
 from config.settings import BINANCE_API_KEY, BINANCE_API_SECRET, BINANCE_TESTNET, TIMEZONE
 from binance.um_futures import UMFutures
+from cache.market_data_cache import get_market_cache
 
 def get_logger(name):
     """Simple logger function"""
@@ -16,6 +17,10 @@ class RobotBinance:
         self.symbol = self.pair
         self.logger = get_logger("RobotBinance")
         self.client = self._initialize_client()
+        
+        # Initialize market data cache
+        self.cache = get_market_cache()
+        self.logger.debug(f"🏛️ Binance client initialized with cache for {pair} {temporality}")
 
     def _initialize_client(self):
         """Initialize and configure Binance client."""
@@ -122,6 +127,16 @@ class RobotBinance:
     def candlestick(self, start_str: str = None, end_str: str = None, limit: int = 1500) -> pd.DataFrame:
         """Get candlestick data for the symbol, optionally for a given date range."""
         try:
+            # 🚀 CACHE CHECK - Only for recent data without date filters
+            if start_str is None and end_str is None:
+                cached_df = self.cache.get(self.symbol, self.temporality, limit)
+                if cached_df is not None:
+                    self.logger.debug(f"⚡ Using cached data for {self.symbol} {self.temporality} (limit={limit})")
+                    return cached_df
+            
+            # Cache miss or date-filtered request - fetch from API
+            self.logger.debug(f"📡 Fetching fresh data from Binance API for {self.symbol} {self.temporality}")
+            
             params = {
                 'symbol': self.symbol,
                 'interval': self.temporality,
@@ -177,6 +192,11 @@ class RobotBinance:
             if df.empty or len(df) < 2: # Chequear si el DataFrame está vacío después de limpiar
                 self.logger.warning(f"Insufficient data for {self.symbol} after cleaning. DataFrame is empty or has less than 2 rows.")
                 return pd.DataFrame() # Devolver DataFrame vacío
+            
+            # 🚀 CACHE STORE - Only cache recent data without date filters
+            if start_str is None and end_str is None and not df.empty:
+                self.cache.set(self.symbol, self.temporality, limit, df[['open', 'high', 'low', 'close', 'volume']])
+                self.logger.debug(f"💾 Cached fresh data for {self.symbol} {self.temporality}")
             
             # Ya no necesitas retornar 'timestamp' como columna porque es el índice
             return df[['open', 'high', 'low', 'close', 'volume']]

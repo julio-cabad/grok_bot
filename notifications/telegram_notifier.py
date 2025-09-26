@@ -76,7 +76,8 @@ class TelegramNotifier:
   
     def notify_position_opened(self, symbol: str, side: str, entry_price: float, 
                               quantity: float, stop_loss: float, take_profit: float,
-                              timeframe: str = "1m") -> bool:
+                              timeframe: str = "1m", ai_score: Optional[float] = None, 
+                              ai_reasoning: Optional[str] = None) -> bool:
         """Send notification when position is opened"""
         try:
             # Format timestamp
@@ -85,12 +86,42 @@ class TelegramNotifier:
             # Calculate position value
             position_value = entry_price * quantity
             
+            # Calculate risk/reward
+            risk = abs(entry_price - stop_loss)
+            reward = abs(entry_price - take_profit)
+            rr_ratio = reward / risk if risk > 0 else 0
+            
+            # AI Score emoji and text
+            ai_section = ""
+            if ai_score is not None:
+                if ai_score >= 8.0:
+                    score_emoji = "🟢"
+                    score_text = "EXCELLENT"
+                elif ai_score >= 7.0:
+                    score_emoji = "🟡"
+                    score_text = "GOOD"
+                elif ai_score >= 6.0:
+                    score_emoji = "🟠"
+                    score_text = "MODERATE"
+                else:
+                    score_emoji = "🔴"
+                    score_text = "LOW"
+                
+                ai_section = f"""
+🤖 <b>AI SMC ANALYSIS:</b>
+{score_emoji} <b>Score:</b> {ai_score:.1f}/10 ({score_text})"""
+                
+                if ai_reasoning:
+                    # Truncate reasoning if too long
+                    short_reasoning = ai_reasoning[:150] + "..." if len(ai_reasoning) > 150 else ai_reasoning
+                    ai_section += f"""
+💭 <b>Reasoning:</b> {short_reasoning}"""
+            
             # Create message
             message = f"""
-🚀 <b>POSITION OPENED</b>
+🚀 <b>POSITION OPENED - {side}</b>
 
 📊 <b>Symbol:</b> {symbol}
-📈 <b>Side:</b> {side}
 ⏰ <b>Time:</b> {timestamp}
 🕐 <b>Timeframe:</b> {timeframe}
 
@@ -100,6 +131,7 @@ class TelegramNotifier:
 
 🛑 <b>Stop Loss:</b> ${stop_loss:.4f}
 🎯 <b>Take Profit:</b> ${take_profit:.4f}
+⚖️ <b>Risk/Reward:</b> 1:{rr_ratio:.2f}{ai_section}
 
 🏛️ <i>Spartan Trading System</i>
             """.strip()
