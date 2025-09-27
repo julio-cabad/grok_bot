@@ -13,35 +13,35 @@ BINANCE_API_KEY = os.getenv('BINANCE_API_KEY')
 BINANCE_API_SECRET = os.getenv('BINANCE_API_SECRET')
 BINANCE_TESTNET = os.getenv('BINANCE_TESTNET', 'False').lower() == 'true'
 
-# Data Collection Configuration - 20 EPIC CRYPTO SYMBOLS
+# Data Collection Configuration - TOP 20 CRYPTO SYMBOLS (Clean & Optimized)
 SYMBOLS: List[str] = [
-    # 🏆 TOP TIER - MAJOR CRYPTOS
+    # 🏆 TOP TIER - MAJOR CRYPTOS (High Volume & Liquidity)
     'BTCUSDT',   # Bitcoin - King of Crypto
     'ETHUSDT',   # Ethereum - Smart Contract Leader
-    'ADAUSDT',   # Cardano - Academic Blockchain
     'SOLUSDT',   # Solana - High Performance
-    'DOTUSDT',   # Polkadot - Interoperability
-    
-    # 🥇 TIER 1 - ESTABLISHED ALTCOINS
-    'BNBUSDT',   # Binance Coin - Exchange Token
     'XRPUSDT',   # Ripple - Cross-border Payments
+    'BNBUSDT',   # Binance Coin - Exchange Token
+    
+    # 🥇 TIER 1 - ESTABLISHED ALTCOINS (Proven Track Record)
+    'ADAUSDT',   # Cardano - Academic Blockchain
+    'DOTUSDT',   # Polkadot - Interoperability
     'MATICUSDT', # Polygon - Ethereum Scaling
     'AVAXUSDT',  # Avalanche - Fast Consensus
     'LINKUSDT',  # Chainlink - Oracle Network
     
-    # 🥈 TIER 2 - PROMISING PROJECTS
+    # 🥈 TIER 2 - HIGH MOMENTUM COINS (Active Trading)
     'ATOMUSDT',  # Cosmos - Internet of Blockchains
-    'ALGOUSDT',  # Algorand - Pure Proof of Stake
-    'VETUSDT',   # VeChain - Supply Chain
-    'FTMUSDT',   # Fantom - Fast & Secure
     'NEARUSDT',  # NEAR Protocol - Developer Friendly
+    'DOGEUSDT',  # Doge - Meme King
+    'TONUSDT',   # TON - Telegram
+    'SUIUSDT',   # Sui - New Layer 1
+    'TIAUSDT',   # Celestia - Modular Blockchain
+    'HBARUSDT',  # Hedera - Enterprise DLT
+    'TRXUSDT',   # Tron - Content Entertainment
     
     # 🥉 TIER 3 - EMERGING OPPORTUNITIES
-    'SANDUSDT',  # The Sandbox - Metaverse Gaming
-    'MANAUSDT',  # Decentraland - Virtual Reality
     'CHZUSDT',   # Chiliz - Sports & Entertainment
     'ENJUSDT',   # Enjin Coin - Gaming NFTs
-    'GALAUSDT'   # Gala - Gaming Ecosystem
 ]
 
 # Comisiones de Binance (incluir en cálculos de rentabilidad)
@@ -98,6 +98,12 @@ CHECK_INTERVAL_SECONDS: int = get_check_interval()  # Dynamic interval based on 
 ENABLE_INFINITE_LOOP: bool = True  # Habilitar bucle infinito
 
 # AI Validation Configuration
-USE_AI_VALIDATION: bool = True  # Feature flag para activar validación IA
-AI_CONFIDENCE_THRESHOLD: float = 7.5  # Umbral mínimo de confianza IA
+USE_AI_VALIDATION: bool = False  # Feature flag para activar validación IA (Disabled due to quota)
+AI_CONFIDENCE_THRESHOLD: float = 7.5  # Umbral base de confianza IA
 AI_TIMEOUT_SECONDS: int = 45  # Timeout máximo para análisis IA
+
+# Adaptive Threshold Configuration
+USE_ADAPTIVE_THRESHOLD: bool = True  # Activar threshold adaptativo
+BULL_MARKET_THRESHOLD: float = 6.5   # Más agresivo en mercados alcistas
+BEAR_MARKET_THRESHOLD: float = 8.0   # Más conservador en mercados bajistas
+HIGH_VOLATILITY_THRESHOLD: float = 8.5  # Extra conservador en alta volatilidad

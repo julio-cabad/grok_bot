@@ -6,13 +6,16 @@ High-performance, scalable strategies for multi-crypto institutional trading
 
 import logging
 import sys
+import pandas as pd
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
 from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config.settings import TIMEZONE, POSITION_SIZE, time_frame, taker_fee, USE_AI_VALIDATION, AI_CONFIDENCE_THRESHOLD, AI_TIMEOUT_SECONDS
+from config.settings import (TIMEZONE, POSITION_SIZE, time_frame, taker_fee, USE_AI_VALIDATION, 
+                           AI_CONFIDENCE_THRESHOLD, AI_TIMEOUT_SECONDS, USE_ADAPTIVE_THRESHOLD,
+                           BULL_MARKET_THRESHOLD, BEAR_MARKET_THRESHOLD, HIGH_VOLATILITY_THRESHOLD)
 
 if TYPE_CHECKING:
     from notifications.telegram_notifier import TelegramNotifier
@@ -101,6 +104,83 @@ class StrategyManager:
             except Exception as e:
                 self.logger.error(f"❌ Failed to initialize AI Validator: {e}")
                 self.ai_validator = None
+
+    def _should_call_ai(self, df: pd.DataFrame, signal_type: SignalType, symbol: str) -> bool:
+        """
+        Pre-filtro técnico para evitar llamadas IA costosas en casos obvios
+        Solo rechaza señales que IA también rechazaría (Score < 6.0)
+        """
+        try:
+            latest = df.iloc[-1]
+            
+            # Obtener indicadores técnicos
+            macd_hist = float(latest.get('MACD_hist_12_26_9', 0))
+            stoch_k = float(latest.get('STOCH_K_14_3', 50))
+            bb_upper = float(latest.get('BB_upper_20', 0))
+            bb_middle = float(latest.get('BB_middle_20', 0))
+            bb_lower = float(latest.get('BB_lower_20', 0))
+            close_price = float(latest['close'])
+            current_volume = float(latest['volume'])
+            
+            # Calcular posición en Bollinger Bands
+            if bb_upper != bb_lower:
+                bb_position = ((close_price - bb_lower) / (bb_upper - bb_lower)) * 100
+            else:
+                bb_position = 50
+            
+            # Calcular volumen promedio
+            avg_volume = df['volume'].tail(20).mean()
+            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+            
+            # Calcular niveles de soporte/resistencia
+            resistance = df['high'].tail(50).max()
+            support = df['low'].tail(50).min()
+            
+            # Contador de señales negativas
+            negative_signals = 0
+            
+            if signal_type == SignalType.LONG:
+                # Señales negativas para LONG
+                if macd_hist < -50:  # MACD muy bearish
+                    negative_signals += 1
+                if stoch_k > 85:  # Muy overbought
+                    negative_signals += 1
+                if bb_position > 90:  # Precio en banda superior (overbought)
+                    negative_signals += 1
+                if close_price > resistance * 0.995:  # Muy cerca de resistencia
+                    negative_signals += 1
+                if volume_ratio < 0.6:  # Volumen muy bajo
+                    negative_signals += 1
+                    
+            elif signal_type == SignalType.SHORT:
+                # Señales negativas para SHORT
+                if macd_hist > 50:  # MACD muy bullish
+                    negative_signals += 1
+                if stoch_k < 15:  # Muy oversold
+                    negative_signals += 1
+                if bb_position < 10:  # Precio en banda inferior (oversold)
+                    negative_signals += 1
+                if close_price < support * 1.005:  # Muy cerca de soporte
+                    negative_signals += 1
+                if volume_ratio < 0.6:  # Volumen muy bajo
+                    negative_signals += 1
+            
+            # Solo rechaza si hay 3+ señales negativas (caso muy obvio)
+            should_call = negative_signals < 3
+            
+            if not should_call:
+                self.logger.debug(
+                    f"Pre-filter metrics for {symbol} {signal_type.value}: "
+                    f"MACD_hist={macd_hist:.1f}, Stoch_K={stoch_k:.1f}, "
+                    f"BB_pos={bb_position:.1f}%, Vol_ratio={volume_ratio:.2f}, "
+                    f"Negative_signals={negative_signals}"
+                )
+            
+            return should_call
+            
+        except Exception as e:
+            self.logger.warning(f"Pre-filter error for {symbol}: {e}")
+            return True  # En caso de error, permitir llamada IA
 
     def _trigger_alert(self, symbol: str, signal_type: SignalType, reason: str) -> None:
         """Play an audible alert and log the new trading signal."""
@@ -335,7 +415,25 @@ class StrategyManager:
 
                 if signal_type in (SignalType.LONG, SignalType.SHORT) and close_price is not None:
                     
-                    # 🤖 AI VALIDATION - Only if enabled
+                    # 🔍 PRE-FILTRO TÉCNICO - Ahorro de costos IA
+                    if self.ai_validator is not None and not self._should_call_ai(df, signal_type, symbol):
+                        self.logger.info(f"🚫 PRE-FILTER rejected {signal_type.value} for {symbol}: Weak technical confluence")
+                        signal = TradingSignal(
+                            symbol=symbol,
+                            signal_type=SignalType.WAIT,
+                            strength=SignalStrength.WEAK,
+                            entry_price=None,
+                            stop_loss=None,
+                            take_profit=None,
+                            risk_reward_ratio=None,
+                            confidence=0.3,  # Low confidence for pre-filtered signals
+                            timestamp=datetime.utcnow().isoformat(),
+                            reason="PRE_FILTER_REJECTED: Weak technical confluence or obvious rejection zone",
+                            position_opened_at=None,
+                        )
+                        return signal
+                    
+                    # 🤖 AI VALIDATION - Only if enabled and passes pre-filter
                     ai_result = None
                     if self.ai_validator is not None:
                         try:

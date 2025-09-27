@@ -61,7 +61,7 @@ def process_symbols(strategy_manager: StrategyManager):
     # Start total cycle timing
     cycle_start = time.time()
 
-    for symbol in SYMBOLS[:10]:  # Process all symbols
+    for symbol in SYMBOLS:  # Process all symbols
         with TimingContext(performance_monitor, 'symbol_processing', {'symbol': symbol}):
             try:
                 performance_monitor.increment_counter('symbols_processed')
