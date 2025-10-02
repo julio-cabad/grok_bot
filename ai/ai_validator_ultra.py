@@ -18,6 +18,14 @@ from ai.grok_client import GrokClient
 from ai.modules.fast_smc_analyzer import FastSMCAnalyzer
 from config.settings import AI_TIMEOUT_SECONDS
 
+# Importar sistema de filtros
+try:
+    from ai.filters import FilterManager
+    FILTERS_AVAILABLE = True
+except ImportError as e:
+    FilterManager = None
+    FILTERS_AVAILABLE = False
+
 
 @dataclass
 class ValidationResult:
@@ -108,8 +116,24 @@ class AIValidatorUltra:
         self.grok_fallbacks = 0
         self.total_queries = 0
         
+        # Inicializar sistema de filtros
+        try:
+            if FILTERS_AVAILABLE:
+                self.filter_manager = FilterManager()
+                self.filters_enabled = True
+                self.logger.info(f"🔍 Sistema de filtros inicializado: {self.filter_manager}")
+            else:
+                self.filter_manager = None
+                self.filters_enabled = False
+                self.logger.info("⚠️ Sistema de filtros no disponible")
+        except Exception as e:
+            self.filter_manager = None
+            self.filters_enabled = False
+            self.logger.warning(f"⚠️ Error inicializando filtros: {e}")
+        
         self.logger.info(f"⚡ Ultra AIValidator initialized - Timeout: {timeout_seconds}s, Threshold: {confidence_threshold}")
         self.logger.info(f"🔄 Fallback system: {'ENABLED' if self.has_grok_backup else 'DISABLED'}")
+        self.logger.info(f"🔍 Filter system: {'ENABLED' if self.filters_enabled else 'DISABLED'}")
 
     def validate_signal(self, df: pd.DataFrame, symbol: str, signal_type: str) -> ValidationResult:
         start_time = time.time()
@@ -153,6 +177,34 @@ class AIValidatorUltra:
             
             # Parse result
             result = self._parse_response(response, symbol, signal_type)
+            
+            # APLICAR FILTROS INTELIGENTES (NUEVO)
+            if self.filters_enabled and self.filter_manager:
+                try:
+                    # Preparar datos para filtros
+                    market_data = {
+                        'df': df,
+                        'smc': smc,
+                        'tech': tech,
+                        'symbol': symbol,
+                        'signal_type': signal_type
+                    }
+                    
+                    # Aplicar filtros al score de la IA
+                    filter_summary = self.filter_manager.apply_filters(
+                        symbol, signal_type, result.confidence, market_data
+                    )
+                    
+                    # Actualizar resultado con filtros aplicados
+                    result = self._merge_ai_and_filters(result, filter_summary)
+                    
+                    # Log comparativo para TradingView
+                    self.logger.info(f"🔍 FILTROS {symbol}: Score {filter_summary.original_score:.1f} → {filter_summary.final_score:.1f} | {filter_summary.trade_decision}")
+                    
+                except Exception as filter_error:
+                    self.logger.warning(f"⚠️ Error en filtros para {symbol}: {filter_error}")
+                    # Continuar sin filtros si hay error
+            
             result.analysis_time = time.time() - start_time
             
             # Cache result
@@ -445,6 +497,46 @@ TP: [take profit]""".strip()
             print("🚨 WARNING: High fallback usage - Consider checking Gemini API")
         elif stats['fallback_usage_rate'] > 0:
             print("✅ GOOD: Fallback system working when needed")
+
+    def _merge_ai_and_filters(self, ai_result: ValidationResult, filter_summary) -> ValidationResult:
+        """
+        Combina resultado de IA con filtros aplicados
+        
+        Args:
+            ai_result: Resultado original de la IA
+            filter_summary: Resumen de filtros aplicados
+            
+        Returns:
+            ValidationResult actualizado con filtros
+        """
+        try:
+            # Usar score filtrado
+            filtered_confidence = filter_summary.final_score
+            
+            # Mantener decisión original pero actualizar con filtros
+            should_enter = ai_result.should_enter
+            
+            # Si filtros rechazaron explícitamente, rechazar
+            if filter_summary.trade_decision == "REJECTED":
+                should_enter = False
+            
+            # Actualizar reasoning con info de filtros
+            filter_info = f" | Filtros: {filter_summary.original_score:.1f}→{filter_summary.final_score:.1f}"
+            updated_reasoning = ai_result.reasoning + filter_info
+            
+            return ValidationResult(
+                should_enter=should_enter,
+                confidence=filtered_confidence,
+                reasoning=updated_reasoning,
+                entry_level=ai_result.entry_level,
+                stop_loss=ai_result.stop_loss,
+                take_profit=ai_result.take_profit,
+                analysis_time=ai_result.analysis_time
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error combinando IA y filtros: {e}")
+            return ai_result
 
     def clear_cache(self) -> None:
         """Clear cache"""

@@ -57,7 +57,7 @@ POSITION_SIZE: float = 100.0  # Tamaño fijo de posición en USD
 
 # Timeframe Configuration - OPTIMIZED FOR HIGHER TIMEFRAMES
 USE_HIGHER_TIMEFRAMES: bool = os.getenv('USE_HIGHER_TIMEFRAMES', 'true').lower() == 'true'  # Feature flag para timeframes superiores
-time_frame: str = '4h' if USE_HIGHER_TIMEFRAMES else '1m'  # Default to 1H for better signal quality and less noise
+time_frame: str = '1h' if USE_HIGHER_TIMEFRAMES else '1m'  # Default to 1H for better signal quality and less noise
 TIMEZONE: str = "America/Guayaquil"  # Ecuador timezone (UTC-5)
 
 # Higher Timeframes Feature Flag
