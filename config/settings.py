@@ -25,7 +25,7 @@ SYMBOLS: List[str] = [
     # 🥇 TIER 1 - ESTABLISHED ALTCOINS (Proven Track Record)
     'ADAUSDT',   # Cardano - Academic Blockchain
     'DOTUSDT',   # Polkadot - Interoperability
-    'MATICUSDT', # Polygon - Ethereum Scaling
+    'ENAUSDT', # Polygon - Ethereum Scaling
     'AVAXUSDT',  # Avalanche - Fast Consensus
     'LINKUSDT',  # Chainlink - Oracle Network
     
@@ -42,6 +42,7 @@ SYMBOLS: List[str] = [
     # 🥉 TIER 3 - EMERGING OPPORTUNITIES
     'CHZUSDT',   # Chiliz - Sports & Entertainment
     'ENJUSDT',   # Enjin Coin - Gaming NFTs
+    'XLMUSDT',   # Enjin Coin - Gaming NFTs
 ]
 
 # Comisiones de Binance (incluir en cálculos de rentabilidad)
@@ -56,7 +57,7 @@ POSITION_SIZE: float = 100.0  # Tamaño fijo de posición en USD
 
 # Timeframe Configuration - OPTIMIZED FOR HIGHER TIMEFRAMES
 USE_HIGHER_TIMEFRAMES: bool = os.getenv('USE_HIGHER_TIMEFRAMES', 'true').lower() == 'true'  # Feature flag para timeframes superiores
-time_frame: str = '1h' if USE_HIGHER_TIMEFRAMES else '1m'  # Default to 1H for better signal quality and less noise
+time_frame: str = '4h' if USE_HIGHER_TIMEFRAMES else '1m'  # Default to 1H for better signal quality and less noise
 TIMEZONE: str = "America/Guayaquil"  # Ecuador timezone (UTC-5)
 
 # Higher Timeframes Feature Flag
@@ -68,6 +69,7 @@ TIMEFRAME_CANDLES = {
     '5m': 288,    # 288 * 5min = 24 hours  
     '15m': 96,    # 96 * 15min = 24 hours
     '1h': 168,    # 168 hours = 7 days (optimal for 1H analysis)
+    '2h': 168,    # 168 hours = 7 days (optimal for 1H analysis)
     '4h': 180,    # 180 * 4h = 30 days
     '1d': 90,     # 90 days = 3 months
 }
@@ -83,24 +85,25 @@ TIMEFRAME_INTERVALS = {
     '1m': 5,      # 5 seconds for 1 minute
     '5m': 30,     # 30 seconds for 5 minutes  
     '15m': 60,    # 1 minute for 15 minutes
-    '1h': 300,    # 5 minutes for 1 hour (optimal)
-    '4h': 900,    # 15 minutes for 4 hours
+    '1h': 150,    # 2.5 minutes for 1 hour
+    '2h': 150,    # 5 minutes for 1 hour (optimal)
+    '4h': 300,    # 15 minutes for 4 hours
     '1d': 3600,   # 1 hour for 1 day
 }
 
 # Get optimized interval for current timeframe
 def get_check_interval() -> int:
     """Get optimized check interval based on current timeframe"""
-    return TIMEFRAME_INTERVALS.get(time_frame, 300)
+    return TIMEFRAME_INTERVALS.get(time_frame, 150)
 
 # Bot Configuration - OPTIMIZED FOR HIGHER TIMEFRAMES
 CHECK_INTERVAL_SECONDS: int = get_check_interval()  # Dynamic interval based on timeframe
 ENABLE_INFINITE_LOOP: bool = True  # Habilitar bucle infinito
 
 # AI Validation Configuration
-USE_AI_VALIDATION: bool = False  # Feature flag para activar validación IA (Disabled due to quota)
+USE_AI_VALIDATION: bool = True  # Feature flag para activar validación IA (Disabled due to quota)
 AI_CONFIDENCE_THRESHOLD: float = 7.5  # Umbral base de confianza IA
-AI_TIMEOUT_SECONDS: int = 45  # Timeout máximo para análisis IA
+AI_TIMEOUT_SECONDS: int = 150  # Timeout máximo para análisis IA (increased for Grok-4 fallback)
 
 # Adaptive Threshold Configuration
 USE_ADAPTIVE_THRESHOLD: bool = True  # Activar threshold adaptativo

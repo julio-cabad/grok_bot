@@ -95,7 +95,7 @@ class StrategyManager:
         self.ai_validator = None
         if USE_AI_VALIDATION:
             try:
-                from ai.ai_validator import AIValidator
+                from ai.ai_validator_ultra import AIValidatorUltra as AIValidator
                 self.ai_validator = AIValidator(
                     timeout_seconds=AI_TIMEOUT_SECONDS,
                     confidence_threshold=AI_CONFIDENCE_THRESHOLD
@@ -116,6 +116,7 @@ class StrategyManager:
             # Obtener indicadores técnicos
             macd_hist = float(latest.get('MACD_hist_12_26_9', 0))
             stoch_k = float(latest.get('STOCH_K_14_3', 50))
+            stoch_d = float(latest.get('STOCH_D_14_3', 50))  # ⭐ AGREGADO
             bb_upper = float(latest.get('BB_upper_20', 0))
             bb_middle = float(latest.get('BB_middle_20', 0))
             bb_lower = float(latest.get('BB_lower_20', 0))
@@ -139,41 +140,69 @@ class StrategyManager:
             # Contador de señales negativas
             negative_signals = 0
             
+            # 🎯 PRE-FILTRO SIMPLE Y EFECTIVO - COMPRAR BARATO, VENDER CARO
+            
             if signal_type == SignalType.LONG:
-                # Señales negativas para LONG
-                if macd_hist < -50:  # MACD muy bearish
-                    negative_signals += 1
-                if stoch_k > 85:  # Muy overbought
-                    negative_signals += 1
-                if bb_position > 90:  # Precio en banda superior (overbought)
-                    negative_signals += 1
-                if close_price > resistance * 0.995:  # Muy cerca de resistencia
-                    negative_signals += 1
-                if volume_ratio < 0.6:  # Volumen muy bajo
+                # REGLA PRINCIPAL: Solo comprar en zona baja (K < 40)
+                if stoch_k >= 40:  # No comprar caro
+                    negative_signals += 2
+                    self.logger.warning(f"🚨 LONG REJECTED: {symbol} K={stoch_k:.1f} ≥ 40 (too expensive to buy)")
+                
+                # MOMENTUM: Debe ser alcista o neutral - REGLA BLOQUEANTE
+                if stoch_k < stoch_d:  # Momentum bajista = NO LONG
+                    negative_signals += 2  # BLOQUEANTE - PROTEGE CAPITAL
+                    self.logger.warning(f"🚨 LONG REJECTED: {symbol} K={stoch_k:.1f} < D={stoch_d:.1f} (bearish momentum - DANGEROUS)")
+                
+                # MACD: Evitar muy bearish
+                if macd_hist < -15:  # Muy bearish
                     negative_signals += 1
                     
+                # BOLLINGER: Evitar muy cerca banda superior
+                if bb_position > 85:  # Muy cerca resistencia
+                    negative_signals += 1
+                    
+                # VOLUMEN: Confirmación mínima
+                if volume_ratio < 0.7:  # Volumen bajo
+                    negative_signals += 0.5
+                    
             elif signal_type == SignalType.SHORT:
-                # Señales negativas para SHORT
-                if macd_hist > 50:  # MACD muy bullish
+                # REGLA PRINCIPAL: Solo vender en zona alta (K > 60)
+                if stoch_k <= 60:  # No vender barato
+                    negative_signals += 2
+                    self.logger.warning(f"🚨 SHORT REJECTED: {symbol} K={stoch_k:.1f} ≤ 60 (too cheap to sell)")
+                
+                # MOMENTUM: Debe ser bajista o neutral - REGLA BLOQUEANTE
+                if stoch_k > stoch_d:  # Momentum alcista = NO SHORT
+                    negative_signals += 2  # BLOQUEANTE - PROTEGE CAPITAL
+                    self.logger.warning(f"🚨 SHORT REJECTED: {symbol} K={stoch_k:.1f} > D={stoch_d:.1f} (bullish momentum - DANGEROUS)")
+                
+                # MACD: Evitar muy bullish
+                if macd_hist > 15:  # Muy bullish
                     negative_signals += 1
-                if stoch_k < 15:  # Muy oversold
+                    
+                # BOLLINGER: Evitar muy cerca banda inferior
+                if bb_position < 15:  # Muy cerca soporte
                     negative_signals += 1
-                if bb_position < 10:  # Precio en banda inferior (oversold)
-                    negative_signals += 1
-                if close_price < support * 1.005:  # Muy cerca de soporte
-                    negative_signals += 1
-                if volume_ratio < 0.6:  # Volumen muy bajo
-                    negative_signals += 1
+                    
+                # VOLUMEN: Confirmación mínima
+                if volume_ratio < 0.7:  # Volumen bajo
+                    negative_signals += 0.5
             
-            # Solo rechaza si hay 3+ señales negativas (caso muy obvio)
-            should_call = negative_signals < 3
+            # Rechaza si hay 2+ señales negativas (incluye medias señales)
+            should_call = negative_signals < 2.0
+            
+            # 🚨 LOG DETALLADO PARA DEBUGGING
+            self.logger.warning(
+                f"🔍 PRE-FILTER DEBUG {symbol} {signal_type.value}: "
+                f"MACD_hist={macd_hist:.1f}, Stoch_K={stoch_k:.1f}, Stoch_D={stoch_d:.1f}, "
+                f"BB_pos={bb_position:.1f}%, Vol_ratio={volume_ratio:.2f}, "
+                f"Negative_signals={negative_signals}, Should_call={should_call}"
+            )
             
             if not should_call:
-                self.logger.debug(
-                    f"Pre-filter metrics for {symbol} {signal_type.value}: "
-                    f"MACD_hist={macd_hist:.1f}, Stoch_K={stoch_k:.1f}, "
-                    f"BB_pos={bb_position:.1f}%, Vol_ratio={volume_ratio:.2f}, "
-                    f"Negative_signals={negative_signals}"
+                self.logger.warning(
+                    f"❌ PRE-FILTER REJECTED {symbol} {signal_type.value}: "
+                    f"Too many negative signals ({negative_signals})"
                 )
             
             return should_call
@@ -226,6 +255,10 @@ class StrategyManager:
         take_profit: Optional[float],
         ai_score: Optional[float] = None,
         ai_reasoning: Optional[str] = None,
+        smc_data: Optional[dict] = None,
+        tech_data: Optional[dict] = None,
+        analysis_time: Optional[float] = None,
+        ai_provider: Optional[str] = None,
     ) -> None:
         if not (self.notifier and self.notify_on_open):
             return
@@ -245,6 +278,10 @@ class StrategyManager:
                 timeframe=time_frame,
                 ai_score=ai_score,
                 ai_reasoning=ai_reasoning,
+                smc_data=smc_data,
+                tech_data=tech_data,
+                analysis_time=analysis_time,
+                ai_provider=ai_provider,
             )
         except Exception as exc:
             self.logger.error(f"Telegram open notification failed for {symbol}: {exc}")
@@ -415,8 +452,8 @@ class StrategyManager:
 
                 if signal_type in (SignalType.LONG, SignalType.SHORT) and close_price is not None:
                     
-                    # 🔍 PRE-FILTRO TÉCNICO - Ahorro de costos IA
-                    if self.ai_validator is not None and not self._should_call_ai(df, signal_type, symbol):
+                    # 🔍 PRE-FILTRO TÉCNICO - SIEMPRE ACTIVO
+                    if not self._should_call_ai(df, signal_type, symbol):
                         self.logger.info(f"🚫 PRE-FILTER rejected {signal_type.value} for {symbol}: Weak technical confluence")
                         signal = TradingSignal(
                             symbol=symbol,
@@ -435,6 +472,7 @@ class StrategyManager:
                     
                     # 🤖 AI VALIDATION - Only if enabled and passes pre-filter
                     ai_result = None
+                    approved_ai_result = None  # Store AI result that approved the trade
                     if self.ai_validator is not None:
                         try:
                             self.logger.info(f"🤖 Validating {signal_type.value} signal for {symbol} with AI SMC...")
@@ -463,7 +501,8 @@ class StrategyManager:
                                 )
                                 return signal
                             else:
-                                # AI approved the trade
+                                # AI approved the trade - SAVE RESULT FOR NOTIFICATION
+                                approved_ai_result = ai_result  # Store the approving AI result
                                 self.logger.info(
                                     f"✅ AI APPROVED {signal_type.value} for {symbol}: "
                                     f"Score={ai_result.confidence:.1f}, Time={ai_result.analysis_time:.1f}s"
@@ -510,14 +549,41 @@ class StrategyManager:
                         'quantity': quantity,
                     }
                     if self.notifier and self.notify_on_open:
+                        # Extract basic technical data for notification
+                        latest = df.iloc[-1]
+                        basic_tech_data = {
+                            'macd_hist': int(latest.get('MACD_hist_12_26_9', 0)),
+                            'macd_x': 'BULL' if latest.get('MACD_hist_12_26_9', 0) > 0 else 'BEAR' if latest.get('MACD_hist_12_26_9', 0) < 0 else 'NONE',
+                            'stoch_k': int(latest.get('STOCH_K_14_3', 50)),
+                            'bb_pos': int(((close_price - latest.get('BB_lower_20', close_price * 0.98)) / 
+                                         (latest.get('BB_upper_20', close_price * 1.02) - latest.get('BB_lower_20', close_price * 0.98))) * 100) if latest.get('BB_upper_20', 0) != latest.get('BB_lower_20', 0) else 50,
+                            'bb_width': ((latest.get('BB_upper_20', close_price * 1.02) - latest.get('BB_lower_20', close_price * 0.98)) / close_price) * 100
+                        }
+                        
+                        # Basic SMC data (simplified)
+                        basic_smc_data = {
+                            'current_zone': 'BEARISH' if signal_type == SignalType.SHORT else 'BULLISH',
+                            'ob_bull': close_price * 0.98,
+                            'ob_bear': close_price * 1.02,
+                            'liq_support': close_price * 0.95,
+                            'liq_resistance': close_price * 1.05,
+                            'fvg_bull': [],
+                            'fvg_bear': [],
+                            'confluence_score': approved_ai_result.confidence if approved_ai_result else 5.0
+                        }
+                        
                         self._notify_position_opened(
                             symbol,
                             signal_type,
                             entry_price,
                             stop_loss,
                             take_profit,
-                            ai_score=ai_result.confidence if ai_result else None,
-                            ai_reasoning=ai_result.reasoning if ai_result else None,
+                            ai_score=approved_ai_result.confidence if approved_ai_result else None,
+                            ai_reasoning=approved_ai_result.reasoning if approved_ai_result else None,
+                            smc_data=basic_smc_data,
+                            tech_data=basic_tech_data,
+                            analysis_time=approved_ai_result.analysis_time if approved_ai_result else None,
+                            ai_provider="gemini" if approved_ai_result else "technical",
                         )
           
                 elif signal_type in (SignalType.LONG, SignalType.SHORT):

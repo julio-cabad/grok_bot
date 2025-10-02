@@ -64,46 +64,14 @@ class GeminiClient:
 
     def analyze_market_data(self, data_summary: str) -> Dict[str, Any]:
         """
-        Analyze market data using Gemini AI with institutional analysis
-
-        Args:
-            data_summary: Summary of market data with technical indicators
-
-        Returns:
-            Analysis dict with insights
+        DEPRECATED: Use unified prompt system in ai_validator_ultra.py instead
+        This method is kept for backward compatibility only
         """
-        prompt = f"""
-        COMO TRADER INSTITUCIONAL EXPERTO, valida esta SEÑAL DE TRADING generada por algoritmo y determina las probabilidades de éxito de entrada.
+        self.logger.warning("⚠️ DEPRECATED: analyze_market_data() - Use unified prompt system instead")
         
-        SEÑAL A VALIDAR:
-        {data_summary}
-        
-        INSTRUCCIONES DE VALIDACIÓN:
-        
-        1. VALIDAR SETUP TÉCNICO: Confirma si los indicadores apoyan la señal (Trend Magic, Squeeze, RSI, etc.)
-        
-        2. ANÁLISIS DE RIESGO: Evalúa el Risk/Reward ratio y posición del stop loss
-        
-        3. PROBABILIDADES INSTITUCIONALES: Basado en Smart Money Concepts, estima win rate (>70% alta, 50-70% media, <50% baja)
-        
-        4. CONDICIONES DE ENTRADA: Define el mejor momento para entrar (precio específico, confirmación requerida)
-        
-        5. RECOMENDACIÓN FINAL: APROBAR o RECHAZAR la entrada con justificación
-        
-        FORMATO DE RESPUESTA:
-        VALIDACIÓN SETUP: [APROBADO/RECHAZADO] - Justificación
-        PROBABILIDAD ÉXITO: [ALTA/MEDIA/BAJA] - % estimado
-        PRECIO ENTRADA ÓPTIMO: [precio específico]
-        STOP LOSS VALIDACIÓN: [precio]
-        TAKE PROFIT SUGERIDO: [precio]
-        CONDICIONES CONFIRMACIÓN: [lista de eventos]
-        RECOMENDACIÓN: [ENTRAR/ESPERAR/RECHAZAR] - Razón final
-        
-        Sé conservador: mejor perder oportunidad que tomar mala entrada.
-        """
-        response = self.query(prompt)
+        # Simple fallback response
         return {
-            "analysis": response,
+            "analysis": "DEPRECATED: Use unified prompt system in ai_validator_ultra.py",
             "model_used": self.model,
-            "timestamp": "2025-09-25"
+            "timestamp": "2025-09-29"
         }
